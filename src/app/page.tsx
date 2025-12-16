@@ -1,11 +1,10 @@
 import { getServerSession } from "next-auth/next";
 import type { Session } from "next-auth";
 
-import { AppHeader } from "@/components/app-header";
-import { ConfigEditor } from "@/components/config-editor";
+import { AppHeader } from "@/components/ui/app-header";
 import { SignInPanel } from "@/components/sign-in-panel";
 import { authOptions } from "@/auth/config";
-import { getRedirectConfig, listRedirectHistory } from "@/lib/github";
+import { RedirectsGroupsManager } from "@/components/ui/redirects-groups";
 
 type SessionWithToken = Session & { accessToken: string };
 
@@ -18,41 +17,16 @@ export default async function Home() {
 
   if (!hasAccessToken(session)) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <AppHeader />
-        <main className="mx-auto max-w-6xl px-6 py-10">
-          <SignInPanel />
-        </main>
-      </div>
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <SignInPanel />
+      </main>
     );
-  }
-
-  let errorMessage: string | null = null;
-  let config: Awaited<ReturnType<typeof getRedirectConfig>> | null = null;
-  let history: Awaited<ReturnType<typeof listRedirectHistory>> = [];
-
-  try {
-    [config, history] = await Promise.all([
-      getRedirectConfig(session.accessToken),
-      listRedirectHistory(session.accessToken, 10)
-    ]);
-  } catch (error) {
-    errorMessage = error instanceof Error ? error.message : "加载配置失败";
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
       <AppHeader />
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        {errorMessage ? (
-          <div className="rounded border border-red-200 bg-red-50 p-6 text-red-700">
-            <h2 className="text-lg font-semibold">无法载入配置</h2>
-            <p className="mt-2 text-sm">{errorMessage}</p>
-          </div>
-        ) : config ? (
-          <ConfigEditor initialContent={config.content} initialSha={config.sha} history={history} />
-        ) : null}
-      </main>
+      <RedirectsGroupsManager />
     </div>
   );
 }
