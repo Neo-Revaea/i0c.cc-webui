@@ -1,10 +1,9 @@
 import { getServerSession } from "next-auth/next";
 import type { Session } from "next-auth";
 
-import { AppHeader } from "@/components/ui/app-header";
 import { SignInPanel } from "@/components/sign-in-panel";
 import { authOptions } from "@/auth/config";
-import { RedirectsGroupsManager } from "@/components/ui/redirects-groups";
+import { RedirectsGroupsPage } from "@/components/ui/redirects-groups/redirects-groups-page";
 
 type SessionWithToken = Session & { accessToken: string };
 
@@ -24,9 +23,6 @@ export default async function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <AppHeader />
-      <RedirectsGroupsManager />
-    </div>
+    <RedirectsGroupsPage />
   );
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import { fetchRedirectsConfig, saveRedirectsConfig } from "@/lib/redirects-groups/api";
-import { createEmptyGroup } from "@/lib/redirects-groups/model";
+import { createEmptyEntry, createEmptyGroup } from "@/lib/redirects-groups/model";
 import { buildConfig, parseInitialContent } from "@/lib/redirects-groups/serialization";
 import {
   ensureUniqueGroupName,
@@ -141,6 +141,47 @@ export function useRedirectsGroups() {
     });
   }, []);
 
+  const addEntry = useCallback((groupId: string) => {
+    setRootGroup((current) => {
+      const [updated] = updateGroupById(current, groupId, (group) => ({
+        ...group,
+        entries: [...group.entries, createEmptyEntry()]
+      }));
+      return updated;
+    });
+  }, []);
+
+  const removeEntry = useCallback((groupId: string, entryId: string) => {
+    setRootGroup((current) => {
+      const [updated] = updateGroupById(current, groupId, (group) => {
+        const nextEntries = group.entries.filter((entry) => entry.id !== entryId);
+        const normalizedEntries = nextEntries.length === 0 && group.children.length === 0 ? [createEmptyEntry()] : nextEntries;
+        return { ...group, entries: normalizedEntries };
+      });
+      return updated;
+    });
+  }, []);
+
+  const updateEntryKey = useCallback((groupId: string, entryId: string, nextKey: string) => {
+    setRootGroup((current) => {
+      const [updated] = updateGroupById(current, groupId, (group) => ({
+        ...group,
+        entries: group.entries.map((entry) => (entry.id === entryId ? { ...entry, key: nextKey } : entry))
+      }));
+      return updated;
+    });
+  }, []);
+
+  const updateEntryValue = useCallback((groupId: string, entryId: string, nextValue: unknown) => {
+    setRootGroup((current) => {
+      const [updated] = updateGroupById(current, groupId, (group) => ({
+        ...group,
+        entries: group.entries.map((entry) => (entry.id === entryId ? { ...entry, value: nextValue } : entry))
+      }));
+      return updated;
+    });
+  }, []);
+
   const removeGroup = useCallback(
     (groupId: string) => {
       if (groupId === rootGroup.id) {
@@ -214,6 +255,10 @@ export function useRedirectsGroups() {
     cancelRename,
     commitRename,
     addGroup,
+    addEntry,
+    removeEntry,
+    updateEntryKey,
+    updateEntryValue,
     removeGroup,
     isPending,
     save,

@@ -1,12 +1,21 @@
 'use client';
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import { GroupTree } from "@/components/ui/group-tree";
 import { Sidebar } from "@/components/ui/sidebar";
-import { useRedirectsGroups } from "./use-redirects-groups";
+import { GroupEntriesEditor } from "@/components/ui/redirects-groups/group-entries-editor";
+import { useRedirectsGroups } from "@/components/ui/redirects-groups/use-redirects-groups";
 
-export function RedirectsGroupsManager() {
+export type RedirectsGroupsManagerProps = {
+  mobileSidebarOpen?: boolean;
+  onMobileSidebarOpenChange?: (open: boolean) => void;
+};
+
+export function RedirectsGroupsManager({
+  mobileSidebarOpen,
+  onMobileSidebarOpenChange,
+}: RedirectsGroupsManagerProps) {
   const {
     isLoading,
     loadError,
@@ -22,12 +31,30 @@ export function RedirectsGroupsManager() {
     cancelRename,
     commitRename,
     addGroup,
+    addEntry,
+    removeEntry,
+    updateEntryKey,
+    updateEntryValue,
     removeGroup,
     isPending,
     save,
     resultMessage,
     lastCommitUrl
   } = useRedirectsGroups();
+
+  const closeMobileSidebar = useCallback(() => {
+    onMobileSidebarOpenChange?.(false);
+  }, [onMobileSidebarOpenChange]);
+
+  const handleSelectGroup = useCallback(
+    (groupId: string) => {
+      selectGroup(groupId);
+      if (mobileSidebarOpen) {
+        closeMobileSidebar();
+      }
+    },
+    [closeMobileSidebar, mobileSidebarOpen, selectGroup]
+  );
 
   const sidebarFooter = useMemo(
     () => (
@@ -63,35 +90,9 @@ export function RedirectsGroupsManager() {
     [isPending, lastCommitUrl, resultMessage, save]
   );
 
-  if (isLoading) {
-    return (
-      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 md:grid-cols-[minmax(0,1fr),20rem]">
-        <section className="min-w-0">
-          <div className="text-sm text-slate-500">加载中...</div>
-        </section>
-        <Sidebar className="order-1 md:order-2" title="分组" footer={sidebarFooter}>
-          <div />
-        </Sidebar>
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 md:grid-cols-[minmax(0,1fr),20rem]">
-        <section className="min-w-0">
-          <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">{loadError}</div>
-        </section>
-        <Sidebar className="order-1 md:order-2" title="分组" footer={sidebarFooter}>
-          <div className="text-sm text-slate-600">无法加载分组</div>
-        </Sidebar>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 md:grid-cols-[minmax(0,1fr),20rem]">
-      <Sidebar className="order-1 md:order-2" title="分组管理" footer={sidebarFooter}>
+  const sidebarBody = useMemo(
+    () => (
+      <>
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-slate-500">{slotsKey}</span>
           <button
@@ -112,7 +113,7 @@ export function RedirectsGroupsManager() {
               selectedGroupId={selectedGroupId}
               editingGroupId={editingGroupId}
               editingName={editingName}
-              onSelectGroup={selectGroup}
+              onSelectGroup={handleSelectGroup}
               onAddChildGroup={addGroup}
               onBeginRenameGroup={beginRename}
               onEditingNameChange={setEditingName}
@@ -122,12 +123,100 @@ export function RedirectsGroupsManager() {
             />
           </div>
         )}
-      </Sidebar>
+      </>
+    ),
+    [
+      addGroup,
+      beginRename,
+      cancelRename,
+      commitRename,
+      editingGroupId,
+      editingName,
+      handleSelectGroup,
+      removeGroup,
+      rootGroup.children,
+      rootGroup.id,
+      selectedGroupId,
+      setEditingName,
+      slotsKey,
+    ]
+  );
 
-      <section className="order-2 min-w-0 md:order-1">
+  const showMobileSidebar = !!mobileSidebarOpen;
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row items-start">
+        <div className="hidden sm:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
+          <Sidebar title="分组" footer={sidebarFooter}>
+            <div />
+          </Sidebar>
+        </div>
+        <section className="order-2 min-w-0 flex-1">
+          <div className="text-sm text-slate-500">加载中...</div>
+        </section>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row items-start">
+        <div className="hidden sm:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
+          <Sidebar title="分组" footer={sidebarFooter}>
+            <div className="text-sm text-slate-600">无法加载分组</div>
+          </Sidebar>
+        </div>
+        <section className="order-2 min-w-0 flex-1">
+          <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">{loadError}</div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row items-start">
+      <div className="hidden sm:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
+        <Sidebar title="分组管理" footer={sidebarFooter}>
+          {sidebarBody}
+        </Sidebar>
+      </div>
+
+      {showMobileSidebar ? (
+        <div className="sm:hidden fixed inset-0 z-50 bg-slate-50">
+          <div className="h-full overflow-y-auto px-6 py-6">
+            <div className="mx-auto max-w-6xl space-y-6">
+              <Sidebar title="分组管理" footer={sidebarFooter}>
+                {sidebarBody}
+              </Sidebar>
+              <button
+                type="button"
+                onClick={closeMobileSidebar}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <section className="order-2 min-w-0 flex-1">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-lg">
-          <h1 className="text-lg font-semibold text-slate-900">分组</h1>
-          <p className="mt-1 text-sm text-slate-500">{selectedGroup ? selectedGroup.name : "从右侧选择分组"}</p>
+          {selectedGroup ? (
+            <GroupEntriesEditor
+              group={selectedGroup}
+              onAddEntry={addEntry}
+              onRemoveEntry={removeEntry}
+              onUpdateEntryKey={updateEntryKey}
+              onUpdateEntryValue={updateEntryValue}
+            />
+          ) : (
+            <div>
+              <h1 className="text-lg font-semibold text-slate-900">分组</h1>
+              <p className="mt-1 text-sm text-slate-500">从右侧选择分组</p>
+            </div>
+          )}
         </div>
       </section>
     </div>

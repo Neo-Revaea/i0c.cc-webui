@@ -3,13 +3,51 @@
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 
-export function AppHeader() {
+export type AppHeaderProps = {
+  mobileSidebarToggle?: {
+    isOpen: boolean;
+    onToggle: () => void;
+  };
+};
+
+export function AppHeader({ mobileSidebarToggle }: AppHeaderProps) {
   const { data: session } = useSession();
+  const sidebarToggleLabel = mobileSidebarToggle?.isOpen ? "隐藏分组" : "展开分组";
 
   return (
     <header className="sticky top-0 z-40 border-b-2 border-slate-200/70 bg-white/80 backdrop-blur shadow-md rounded-b-2xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <div className="flex min-w-0 items-center gap-3">
+          {mobileSidebarToggle ? (
+            <button
+              type="button"
+              onClick={mobileSidebarToggle.onToggle}
+              aria-pressed={mobileSidebarToggle.isOpen}
+              aria-label={sidebarToggleLabel}
+              title={sidebarToggleLabel}
+              className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            >
+              {mobileSidebarToggle.isOpen ? (
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                  <path
+                    d="M6 6L18 18M18 6L6 18"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                  <path
+                    d="M4 6H20M4 12H20M4 18H20"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+            </button>
+          ) : null}
           <Image
             src="/favicon.ico"
             alt="i0c.cc"
