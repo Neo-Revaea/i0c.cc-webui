@@ -53,7 +53,7 @@ export function AppHeader({ mobileSidebarToggle }: AppHeaderProps) {
             alt="i0c.cc"
             width={30}
             height={30}
-            className="rounded-lg border-2 border-slate-400"
+            className="rounded-lg border-2 border-slate-200"
             priority
           />
           <span className="truncate text-lg font-semibold text-slate-900">i0c.cc 控制台</span>

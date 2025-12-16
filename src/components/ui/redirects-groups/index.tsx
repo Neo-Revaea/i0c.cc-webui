@@ -2,8 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 
-import { GroupTree } from "@/components/ui/group-tree";
-import { Sidebar } from "@/components/ui/sidebar";
+import { GroupTree, Sidebar } from "@/components/ui/sidebar";
 import { GroupEntriesEditor } from "@/components/ui/redirects-groups/group-entries-editor";
 import { useRedirectsGroups } from "@/components/ui/redirects-groups/use-redirects-groups";
 
