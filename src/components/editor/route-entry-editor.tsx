@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type RouteMode = "string" | "object";
+type RouteMode = "string" | "object" | "array";
 type DestinationKey = "target" | "to" | "url";
 
 type DropdownOption = {
@@ -128,6 +128,9 @@ function normalizePriority(value: unknown): string {
 }
 
 function getMode(value: unknown): RouteMode {
+  if (Array.isArray(value)) {
+    return "array";
+  }
   if (isRecord(value)) {
     return "object";
   }
@@ -170,16 +173,19 @@ export type RouteEntryEditorProps = {
   value: unknown;
   onChange: (next: unknown) => void;
   level?: number;
+  allowArray?: boolean;
 };
 
-export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEditorProps) {
+export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true }: RouteEntryEditorProps) {
   const mode = useMemo(() => getMode(value), [value]);
 
   const stringValue = mode === "string" ? asString(value) : "";
   const configValue = mode === "object" && isRecord(value) ? value : null;
+  const arrayValue = mode === "array" && Array.isArray(value) ? value : null;
 
   const stringDraftRef = useRef<string>(stringValue);
   const objectDraftRef = useRef<Record<string, unknown> | null>(configValue);
+  const arrayDraftRef = useRef<unknown[] | null>(arrayValue);
 
   useEffect(() => {
     if (mode === "string") {
@@ -192,6 +198,12 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
       objectDraftRef.current = configValue;
     }
   }, [configValue, mode]);
+
+  useEffect(() => {
+    if (mode === "array" && arrayValue) {
+      arrayDraftRef.current = arrayValue;
+    }
+  }, [arrayValue, mode]);
 
   const setMode = useCallback(
     (nextMode: RouteMode) => {
@@ -209,6 +221,16 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
           onChange(asString(configValue[destinationKey]));
           return;
         }
+        if (arrayValue && arrayValue.length > 0) {
+          const first = arrayValue[0];
+          if (isRecord(first)) {
+            const destinationKey = getDestinationKey(first);
+            onChange(asString(first[destinationKey]));
+            return;
+          }
+          onChange(asString(first));
+          return;
+        }
         onChange("");
         return;
       }
@@ -218,14 +240,49 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
           onChange(cached);
           return;
         }
+
+        if (arrayValue && arrayValue.length > 0) {
+          const first = arrayValue[0];
+          if (isRecord(first)) {
+            onChange(first);
+            return;
+          }
+          const seed = createEmptyConfig();
+          const seededConfig =
+            asString(first).trim() === "" ? seed : setExclusiveDestination(seed, "target", asString(first).trim());
+          onChange(seededConfig);
+          return;
+        }
+
         const seed = createEmptyConfig();
         const seededConfig =
           stringValue.trim() === "" ? seed : setExclusiveDestination(seed, "target", stringValue.trim());
         onChange(seededConfig);
         return;
       }
+      if (nextMode === "array") {
+        const cached = arrayDraftRef.current;
+        if (cached && cached.length > 0) {
+          onChange(cached);
+          return;
+        }
+        if (arrayValue && arrayValue.length > 0) {
+          onChange(arrayValue);
+          return;
+        }
+        if (configValue) {
+          onChange([configValue]);
+          return;
+        }
+        if (stringValue.trim() !== "") {
+          onChange([stringValue]);
+          return;
+        }
+        onChange([""]);
+        return;
+      }
     },
-    [configValue, mode, onChange, stringValue]
+    [arrayValue, configValue, mode, onChange, stringValue]
   );
 
   const containerClassName = level > 0 ? "mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4" : "";
@@ -280,6 +337,32 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
             </svg>
           ) : null}
         </button>
+
+        {allowArray ? (
+          <button
+            type="button"
+            onClick={() => setMode("array")}
+            className={
+              "relative inline-flex items-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
+              (mode === "array"
+                ? "border-slate-300 bg-white text-slate-900 pr-7"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
+            }
+          >
+            多条规则
+            {mode === "array" ? (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : null}
+          </button>
+        ) : null}
       </div>
 
       {mode === "string" ? (
@@ -294,15 +377,90 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
         </div>
       ) : null}
 
+      {mode === "array" && arrayValue ? (
+        <div className="mt-4 space-y-3">
+          {arrayValue.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm text-slate-600">还没有规则项，点击下方按钮添加。</p>
+            </div>
+          ) : null}
+
+          {arrayValue.map((item, index) => (
+            <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-slate-500">规则项 {index + 1}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = arrayValue.slice();
+                    next.splice(index, 1);
+                    onChange(next);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50"
+                >
+                  删除
+                </button>
+              </div>
+
+              <div className="mt-3">
+                <RouteEntryEditor
+                  value={Array.isArray(item) ? "" : item}
+                  allowArray={false}
+                  level={level + 1}
+                  onChange={(nextItem) => {
+                    const safeNext = Array.isArray(nextItem) ? "" : nextItem;
+                    const next = arrayValue.slice();
+                    next[index] = safeNext;
+                    onChange(next);
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => onChange([...(arrayValue ?? []), ""])}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
+              <path d="M12 6v12m6-6H6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            新增规则项
+          </button>
+        </div>
+      ) : null}
+
       {mode === "object" && configValue ? (
         <div className="mt-4 grid grid-cols-1 gap-3">
+          {(() => {
+            const routeType = ((configValue.type as string | undefined) ?? "prefix").trim();
+            const showAppendPath = routeType !== "exact";
+            const showStatus = routeType !== "proxy";
+            const detailCols = showStatus ? 3 : 2;
+            const statusValue = normalizeStatus(configValue.status);
+            const priorityValue = normalizePriority(configValue.priority);
+            const statusInvalid = showStatus && statusValue.trim() !== "" && !/^\d{3}$/.test(statusValue.trim());
+            const priorityInvalid = priorityValue.trim() !== "" && !/^-?\d+$/.test(priorityValue.trim());
+
+            return (
+              <>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-medium text-slate-600">type（prefix前缀、exact精确、proxy反代）</label>
               <div className="mt-1">
                 <DropdownSelect
                   value={(configValue.type as string | undefined) ?? "prefix"}
-                  onChange={(next) => onChange({ ...configValue, type: next })}
+                  onChange={(next) => {
+                    const nextConfig: Record<string, unknown> = { ...configValue, type: next };
+                    if (next === "proxy") {
+                      delete nextConfig.status;
+                    }
+                    if (next === "exact") {
+                      delete nextConfig.appendPath;
+                    }
+                    onChange(nextConfig);
+                  }}
                   options={[
                     { value: "prefix", label: "prefix" },
                     { value: "exact", label: "exact" },
@@ -312,22 +470,24 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-600">appendPath</label>
-              <div className="mt-1 inline-flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-3 text-sm text-slate-900">
-                <input
-                  type="checkbox"
-                  checked={Boolean(configValue.appendPath)}
-                  onChange={(e) => onChange({ ...configValue, appendPath: e.target.checked })}
-                  className="h-4 w-4 rounded border-slate-300 accent-slate-900"
-                />
-                <span className="text-sm text-slate-700">拼接余下路径</span>
+            {showAppendPath ? (
+              <div>
+                <label className="block text-xs font-medium text-slate-600">appendPath</label>
+                <div className="mt-1 inline-flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-3 text-sm text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(configValue.appendPath)}
+                    onChange={(e) => onChange({ ...configValue, appendPath: e.target.checked })}
+                    className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                  />
+                  <span className="text-sm text-slate-700">拼接余下路径</span>
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <div className="sm:col-span-3">
+          <div className={"grid grid-cols-1 gap-2 " + (detailCols === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+            <div className={detailCols === 3 ? "sm:col-span-3" : "sm:col-span-2"}>
               <label className="block text-xs font-medium text-slate-600">目标地址 （target、to、url作用都是一样的）</label>
               <div className="mt-1 flex gap-2">
                 <DropdownSelect
@@ -357,30 +517,38 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-600">status（重定向状态码）</label>
-              <input
-                value={normalizeStatus(configValue.status)}
-                onChange={(e) => {
-                  const raw = e.target.value.trim();
-                  const next = raw === "" ? undefined : raw;
-                  const nextConfig = { ...configValue };
-                  if (next === undefined) {
-                    delete nextConfig.status;
-                    onChange(nextConfig);
-                    return;
+            {showStatus ? (
+              <div>
+                <label className="block text-xs font-medium text-slate-600">status（重定向状态码）</label>
+                <input
+                  value={statusValue}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    const next = raw === "" ? undefined : raw;
+                    const nextConfig = { ...configValue };
+                    if (next === undefined) {
+                      delete nextConfig.status;
+                      onChange(nextConfig);
+                      return;
+                    }
+                    onChange({ ...nextConfig, status: next });
+                  }}
+                  placeholder="301"
+                  className={
+                    "mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 " +
+                    (statusInvalid ? "border-rose-300" : "border-slate-200")
                   }
-                  onChange({ ...nextConfig, status: next });
-                }}
-                placeholder="301"
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
-              />
-            </div>
+                />
+                {statusInvalid ? (
+                  <p className="mt-1 text-xs text-rose-600">需为 3 位数字（例如 301、302）。</p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div>
               <label className="block text-xs font-medium text-slate-600">priority（数字越小优先级越高）</label>
               <input
-                value={normalizePriority(configValue.priority)}
+                value={priorityValue}
                 onChange={(e) => {
                   const raw = e.target.value.trim();
                   const next = raw === "" ? undefined : raw;
@@ -393,10 +561,20 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
                   onChange({ ...nextConfig, priority: next });
                 }}
                 placeholder="0"
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
+                className={
+                  "mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300 " +
+                  (priorityInvalid ? "border-rose-300" : "border-slate-200")
+                }
               />
+              {priorityInvalid ? (
+                <p className="mt-1 text-xs text-rose-600">需为整数（例如 0、10、-1）。</p>
+              ) : null}
             </div>
           </div>
+
+              </>
+            );
+          })()}
         </div>
       ) : null}
 

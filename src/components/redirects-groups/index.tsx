@@ -1,10 +1,12 @@
-'use client';
 
-import { useCallback, useMemo } from "react";
+ 'use client';
+
+import { useCallback, useMemo, useState } from "react";
 
 import { GroupTree, Sidebar } from "@/components/ui/sidebar";
 import { ContentSkeleton, SidebarSkeletonBody, SidebarSkeletonFooter } from "@/components/ui/skeletons";
 import { GroupEntriesEditor } from "@/components/editor/group-entries-editor";
+import { RightPanel } from "@/components/editor/right-panel";
 import { useRedirectsGroups } from "@/components/redirects-groups/use-redirects-groups";
 
 export type RedirectsGroupsManagerProps = {
@@ -36,11 +38,48 @@ export function RedirectsGroupsManager({
     updateEntryKey,
     updateEntryValue,
     removeGroup,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
     isPending,
     save,
+    applyJson,
+    previewJson,
     resultMessage,
     lastCommitUrl
   } = useRedirectsGroups();
+
+  const [editorMode, setEditorMode] = useState<"rules" | "json">("rules");
+  const [jsonDraft, setJsonDraft] = useState("");
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  const enterRulesMode = useCallback(() => {
+    setEditorMode("rules");
+    setJsonError(null);
+  }, []);
+
+  const enterJsonMode = useCallback(() => {
+    setEditorMode("json");
+    setJsonDraft(previewJson);
+    setJsonError(null);
+  }, [previewJson]);
+
+  const handleSave = useCallback(() => {
+    if (editorMode === "json") {
+      try {
+        const normalized = JSON.stringify(JSON.parse(jsonDraft), null, 2);
+        setJsonError(null);
+        applyJson(normalized);
+        save(normalized);
+      } catch (error) {
+        setJsonError(error instanceof Error ? error.message : "JSON 解析失败");
+      }
+      return;
+    }
+
+    save();
+  }, [applyJson, editorMode, jsonDraft, save]);
 
   const closeMobileSidebar = useCallback(() => {
     onMobileSidebarOpenChange?.(false);
@@ -59,9 +98,41 @@ export function RedirectsGroupsManager({
   const sidebarFooter = useMemo(
     () => (
       <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo || isPending}
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            title="撤回"
+            aria-label="撤回"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
+              <path d="M9 14l-4-4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M20 20a8 8 0 0 0-8-8H5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            撤回
+          </button>
+
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo || isPending}
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            title="恢复"
+            aria-label="恢复"
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
+              <path d="M15 6l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M4 20a8 8 0 0 1 8-8h7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            恢复
+          </button>
+        </div>
+
         <button
           type="button"
-          onClick={save}
+          onClick={handleSave}
           disabled={isPending}
           className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
@@ -87,24 +158,26 @@ export function RedirectsGroupsManager({
         ) : null}
       </div>
     ),
-    [isPending, lastCommitUrl, resultMessage, save]
+    [canRedo, canUndo, handleSave, isPending, lastCommitUrl, redo, resultMessage, undo]
   );
 
   const sidebarBody = useMemo(
     () => (
       <>
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-900">分组管理</h2>
-          <button
-            type="button"
-            onClick={() => addGroup(rootGroup.id)}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-          >
-            <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="2">
-              <path d="M12 6v12m6-6H6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            新增分组
-          </button>
+        <div className="sticky top-0 z-10 bg-white pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-900">分组管理</h2>
+            <button
+              type="button"
+              onClick={() => addGroup(rootGroup.id)}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="2">
+                <path d="M12 6v12m6-6H6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              新增分组
+            </button>
+          </div>
         </div>
 
         <button
@@ -226,7 +299,7 @@ export function RedirectsGroupsManager({
               <button
                 type="button"
                 onClick={closeMobileSidebar}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"
               >
                 关闭
               </button>
@@ -236,22 +309,30 @@ export function RedirectsGroupsManager({
       ) : null}
 
       <section className="order-2 min-w-0 flex-1">
-        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-lg">
-          {selectedGroup ? (
-            <GroupEntriesEditor
-              group={selectedGroup}
-              onAddEntry={addEntry}
-              onRemoveEntry={removeEntry}
-              onUpdateEntryKey={updateEntryKey}
-              onUpdateEntryValue={updateEntryValue}
-            />
-          ) : (
-            <div>
-              <h1 className="text-lg font-semibold text-slate-900">分组</h1>
-              <p className="mt-1 text-sm text-slate-500">从右侧选择分组</p>
-            </div>
-          )}
-        </div>
+        <RightPanel
+          editorMode={editorMode}
+          onEnterRulesMode={enterRulesMode}
+          onEnterJsonMode={enterJsonMode}
+          jsonDraft={jsonDraft}
+          onJsonDraftChange={setJsonDraft}
+          jsonError={jsonError}
+          rulesContent={
+            selectedGroup ? (
+              <GroupEntriesEditor
+                group={selectedGroup}
+                onAddEntry={addEntry}
+                onRemoveEntry={removeEntry}
+                onUpdateEntryKey={updateEntryKey}
+                onUpdateEntryValue={updateEntryValue}
+              />
+            ) : (
+              <div>
+                <h1 className="text-lg font-semibold text-slate-900">分组</h1>
+                <p className="mt-1 text-sm text-slate-500">从右侧选择分组</p>
+              </div>
+            )
+          }
+        />
       </section>
     </div>
   );

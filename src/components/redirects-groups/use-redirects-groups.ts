@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import { fetchRedirectsConfig, saveRedirectsConfig } from "@/lib/redirects-groups/api";
+import type { RedirectGroup } from "@/lib/redirects-groups/model";
 import { createEmptyEntry, createEmptyGroup } from "@/lib/redirects-groups/model";
 import { buildConfig, parseInitialContent } from "@/lib/redirects-groups/serialization";
 import {
@@ -12,6 +13,21 @@ import {
   removeGroupById,
   updateGroupById
 } from "@/lib/redirects-groups/state";
+
+type HistorySnapshot = {
+  rootGroup: RedirectGroup;
+  selectedGroupId: string | null;
+};
+
+function cloneSnapshot(value: HistorySnapshot): HistorySnapshot {
+  const sc = (globalThis as unknown as { structuredClone?: (v: unknown) => unknown }).structuredClone;
+  if (typeof sc === "function") {
+    return sc(value) as HistorySnapshot;
+  }
+  return JSON.parse(JSON.stringify(value)) as HistorySnapshot;
+}
+
+const MAX_HISTORY = 50;
 
 export function useRedirectsGroups() {
   const [isLoading, setIsLoading] = useState(true);
@@ -25,6 +41,9 @@ export function useRedirectsGroups() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>("");
+
+  const [undoStack, setUndoStack] = useState<HistorySnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<HistorySnapshot[]>([]);
 
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [lastCommitUrl, setLastCommitUrl] = useState<string | null>(null);
@@ -52,6 +71,9 @@ export function useRedirectsGroups() {
         setRootGroup(parsed.rootGroup);
         setSha(data.config.sha);
 
+        setUndoStack([]);
+        setRedoStack([]);
+
         const initialSelected = parsed.rootGroup.children.at(0)?.id ?? parsed.rootGroup.id;
         setSelectedGroupId(initialSelected);
       } catch (error) {
@@ -70,6 +92,63 @@ export function useRedirectsGroups() {
       cancelled = true;
     };
   }, []);
+
+  const canUndo = undoStack.length > 0;
+  const canRedo = redoStack.length > 0;
+
+  const pushUndoSnapshot = useCallback((snapshot: HistorySnapshot) => {
+    setUndoStack((prev) => {
+      const next = [...prev, cloneSnapshot(snapshot)];
+      return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
+    });
+    setRedoStack([]);
+  }, []);
+
+  const undo = useCallback(() => {
+    setUndoStack((prevUndo) => {
+      if (prevUndo.length === 0) {
+        return prevUndo;
+      }
+
+      const snapshot = prevUndo[prevUndo.length - 1];
+      const nextUndo = prevUndo.slice(0, -1);
+
+      setRedoStack((prevRedo) => [
+        cloneSnapshot({ rootGroup, selectedGroupId }),
+        ...prevRedo,
+      ]);
+
+      setRootGroup(cloneSnapshot(snapshot).rootGroup);
+      setSelectedGroupId(cloneSnapshot(snapshot).selectedGroupId);
+      setEditingGroupId(null);
+      setEditingName("");
+
+      return nextUndo;
+    });
+  }, [rootGroup, selectedGroupId]);
+
+  const redo = useCallback(() => {
+    setRedoStack((prevRedo) => {
+      if (prevRedo.length === 0) {
+        return prevRedo;
+      }
+
+      const snapshot = prevRedo[0];
+      const nextRedo = prevRedo.slice(1);
+
+      setUndoStack((prevUndo) => {
+        const next = [...prevUndo, cloneSnapshot({ rootGroup, selectedGroupId })];
+        return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
+      });
+
+      setRootGroup(cloneSnapshot(snapshot).rootGroup);
+      setSelectedGroupId(cloneSnapshot(snapshot).selectedGroupId);
+      setEditingGroupId(null);
+      setEditingName("");
+
+      return nextRedo;
+    });
+  }, [rootGroup, selectedGroupId]);
 
   const selectedGroup = useMemo(() => {
     if (!selectedGroupId) {
@@ -108,6 +187,7 @@ export function useRedirectsGroups() {
       }
 
       const nextName = ensureUniqueGroupName(parent, groupId, editingName);
+      pushUndoSnapshot({ rootGroup, selectedGroupId });
       setRootGroup((current) => {
         const [updated] = updateGroupById(current, groupId, (group) => ({ ...group, name: nextName }));
         return updated;
@@ -115,10 +195,11 @@ export function useRedirectsGroups() {
 
       cancelRename();
     },
-    [cancelRename, editingName, rootGroup]
+    [cancelRename, editingName, pushUndoSnapshot, rootGroup, selectedGroupId]
   );
 
   const addGroup = useCallback((parentId: string) => {
+    pushUndoSnapshot({ rootGroup, selectedGroupId });
     setRootGroup((current) => {
       const parent = findGroupById(current, parentId);
       if (!parent) {
@@ -139,9 +220,10 @@ export function useRedirectsGroups() {
 
       return updated;
     });
-  }, []);
+  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
 
   const addEntry = useCallback((groupId: string) => {
+    pushUndoSnapshot({ rootGroup, selectedGroupId });
     setRootGroup((current) => {
       const [updated] = updateGroupById(current, groupId, (group) => ({
         ...group,
@@ -149,9 +231,10 @@ export function useRedirectsGroups() {
       }));
       return updated;
     });
-  }, []);
+  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
 
   const removeEntry = useCallback((groupId: string, entryId: string) => {
+    pushUndoSnapshot({ rootGroup, selectedGroupId });
     setRootGroup((current) => {
       const [updated] = updateGroupById(current, groupId, (group) => {
         const nextEntries = group.entries.filter((entry) => entry.id !== entryId);
@@ -160,9 +243,10 @@ export function useRedirectsGroups() {
       });
       return updated;
     });
-  }, []);
+  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
 
   const updateEntryKey = useCallback((groupId: string, entryId: string, nextKey: string) => {
+    pushUndoSnapshot({ rootGroup, selectedGroupId });
     setRootGroup((current) => {
       const [updated] = updateGroupById(current, groupId, (group) => ({
         ...group,
@@ -170,9 +254,10 @@ export function useRedirectsGroups() {
       }));
       return updated;
     });
-  }, []);
+  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
 
   const updateEntryValue = useCallback((groupId: string, entryId: string, nextValue: unknown) => {
+    pushUndoSnapshot({ rootGroup, selectedGroupId });
     setRootGroup((current) => {
       const [updated] = updateGroupById(current, groupId, (group) => ({
         ...group,
@@ -180,7 +265,7 @@ export function useRedirectsGroups() {
       }));
       return updated;
     });
-  }, []);
+  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
 
   const removeGroup = useCallback(
     (groupId: string) => {
@@ -196,6 +281,7 @@ export function useRedirectsGroups() {
         return;
       }
 
+      pushUndoSnapshot({ rootGroup, selectedGroupId });
       setRootGroup((current) => {
         const [updated, changed] = removeGroupById(current, groupId);
         if (!changed) {
@@ -215,18 +301,37 @@ export function useRedirectsGroups() {
       setEditingGroupId((prev) => (prev === groupId ? null : prev));
       setEditingName((prev) => (editingGroupId === groupId ? "" : prev));
     },
-    [editingGroupId, rootGroup]
+    [editingGroupId, pushUndoSnapshot, rootGroup, selectedGroupId]
   );
 
-  const save = useCallback(() => {
+  const applyJson = useCallback(
+    (content: string) => {
+      const parsed = parseInitialContent(content);
+
+      pushUndoSnapshot({ rootGroup, selectedGroupId });
+
+      setSlotsKey(parsed.slotsKey);
+      setBaseConfig(parsed.baseConfig);
+      setRootGroup(parsed.rootGroup);
+
+      const nextSelected = parsed.rootGroup.children.at(0)?.id ?? parsed.rootGroup.id;
+      setSelectedGroupId(nextSelected);
+      setEditingGroupId(null);
+      setEditingName("");
+    },
+    [pushUndoSnapshot, rootGroup, selectedGroupId]
+  );
+
+  const save = useCallback((overrideContent?: string) => {
     startTransition(async () => {
       setResultMessage(null);
       setLastCommitUrl(null);
 
       try {
         const config = buildConfig(rootGroup, baseConfig, slotsKey);
+        const content = overrideContent ?? JSON.stringify(config, null, 2);
         const result = await saveRedirectsConfig({
-          content: JSON.stringify(config, null, 2),
+          content,
           sha,
           message: "Update groups via WebUI"
         });
@@ -239,6 +344,15 @@ export function useRedirectsGroups() {
       }
     });
   }, [baseConfig, rootGroup, sha, slotsKey, startTransition]);
+
+  const previewJson = useMemo(() => {
+    try {
+      const config = buildConfig(rootGroup, baseConfig, slotsKey);
+      return JSON.stringify(config, null, 2);
+    } catch (error) {
+      return error instanceof Error ? `// 预览生成失败：${error.message}` : "// 预览生成失败";
+    }
+  }, [baseConfig, rootGroup, slotsKey]);
 
   return {
     isLoading,
@@ -260,8 +374,14 @@ export function useRedirectsGroups() {
     updateEntryKey,
     updateEntryValue,
     removeGroup,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
     isPending,
     save,
+    applyJson,
+    previewJson,
     resultMessage,
     lastCommitUrl
   };
