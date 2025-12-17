@@ -52,6 +52,27 @@ function ensureRepoConfig(): { owner: string; repo: string; url: string } {
   };
 }
 
+function normalizeGitHubErrorBody(status: number, rawBody: string): string {
+  const trimmed = rawBody.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const json = JSON.parse(trimmed) as { message?: string; documentation_url?: string; status?: string | number };
+    const message = typeof json?.message === "string" ? json.message : trimmed;
+    if (status === 404) {
+      return `${message}（可能是仓库/分支/文件路径不存在，或当前账号无写入权限）`;
+    }
+    return message;
+  } catch {
+    if (status === 404) {
+      return `${trimmed}（可能是仓库/分支/文件路径不存在，或当前账号无写入权限）`;
+    }
+    return trimmed;
+  }
+}
+
 export async function getRedirectConfig(accessToken: string): Promise<RedirectConfigPayload> {
   const { url } = ensureRepoConfig();
   const token = requireAccessToken(accessToken);
@@ -110,7 +131,10 @@ export async function updateRedirectConfig(accessToken: string, input: UpdateRed
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Failed to update config: ${response.status} ${response.statusText} - ${errorBody}`);
+    const normalized = normalizeGitHubErrorBody(response.status, errorBody);
+    throw new Error(
+      `Failed to update config: ${response.status} ${response.statusText}${normalized ? ` - ${normalized}` : ""}`
+    );
   }
 
   const json = (await response.json()) as {

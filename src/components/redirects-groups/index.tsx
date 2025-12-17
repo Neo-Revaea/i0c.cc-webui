@@ -139,7 +139,7 @@ export function RedirectsGroupsManager({
           {isPending ? "保存中..." : "保存改动"}
         </button>
         {resultMessage ? (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-600 whitespace-pre-wrap break-words">
             {resultMessage}
             {lastCommitUrl ? (
               <>
@@ -148,7 +148,7 @@ export function RedirectsGroupsManager({
                   href={lastCommitUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-blue-600 underline hover:text-blue-500"
+                  className="inline-flex max-w-full break-all text-blue-600 underline hover:text-blue-500"
                 >
                   查看提交
                 </a>
