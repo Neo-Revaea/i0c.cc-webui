@@ -1,7 +1,10 @@
 'use client';
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+
+import Ajv, { type AnySchema, type ValidateFunction } from "ajv";
+import addFormats from "ajv-formats";
 
 export type EditorMode = "rules" | "json";
 
@@ -27,8 +30,16 @@ export function RightPanel({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [activeLine, setActiveLine] = useState(1);
 
+  const [schemaLoadError, setSchemaLoadError] = useState<string | null>(null);
+  const [schemaValidationError, setSchemaValidationError] = useState<string | null>(null);
+  const schemaValidatorRef = useRef<((data: unknown) => boolean) | null>(null);
+  const schemaValidatorErrorsRef = useRef<unknown>(null);
+  const schemaLoadingRef = useRef(false);
+
   const lineHeightPx = 20;
   const paddingTopPx = 12;
+
+  const schemaUrl = "https://raw.githubusercontent.com/IGCyukira/i0c.cc/main/redirects.schema.json";
 
   const lineCount = useMemo(() => Math.max(1, jsonDraft.split("\n").length), [jsonDraft]);
 
@@ -51,6 +62,95 @@ export function RightPanel({
       return `JSON 格式错误：${message}`;
     }
   }, [editorMode, jsonDraft]);
+
+  useEffect(() => {
+    if (editorMode !== "json") {
+      return;
+    }
+
+    if (schemaValidatorRef.current || schemaLoadingRef.current) {
+      return;
+    }
+
+    schemaLoadingRef.current = true;
+    setSchemaLoadError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(schemaUrl, { cache: "force-cache" });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} ${response.statusText}`);
+        }
+        const schema = (await response.json()) as AnySchema;
+        const ajv = new Ajv({ allErrors: true, strict: false });
+        addFormats(ajv);
+        const validate: ValidateFunction = ajv.compile(schema);
+        schemaValidatorRef.current = (data: unknown) => {
+          const ok = validate(data);
+          schemaValidatorErrorsRef.current = validate.errors;
+          return ok as boolean;
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "未知错误";
+        setSchemaLoadError(`Schema 加载失败：${message}`);
+      } finally {
+        schemaLoadingRef.current = false;
+      }
+    })();
+  }, [editorMode, schemaUrl]);
+
+  useEffect(() => {
+    if (editorMode !== "json") {
+      setSchemaValidationError(null);
+      return;
+    }
+
+    if (jsonFormatError) {
+      setSchemaValidationError(null);
+      return;
+    }
+
+    const validate = schemaValidatorRef.current;
+    if (!validate) {
+      return;
+    }
+
+    if (jsonDraft.trim() === "") {
+      setSchemaValidationError(null);
+      return;
+    }
+
+    let data: unknown;
+    try {
+      data = JSON.parse(jsonDraft);
+    } catch {
+      setSchemaValidationError(null);
+      return;
+    }
+
+    const ok = validate(data);
+    if (ok) {
+      setSchemaValidationError(null);
+      return;
+    }
+
+    const errors = schemaValidatorErrorsRef.current as
+      | Array<{ instancePath?: string; message?: string }>
+      | null
+      | undefined;
+
+    if (!errors || errors.length === 0) {
+      setSchemaValidationError("Schema 校验失败：未知错误");
+      return;
+    }
+
+    const shown = errors.slice(0, 5).map((item) => {
+      const path = (item.instancePath || "(root)").trim() || "(root)";
+      return `${path}: ${item.message ?? "invalid"}`;
+    });
+    const more = errors.length > 5 ? `\n… 还有 ${errors.length - 5} 条` : "";
+    setSchemaValidationError(`Schema 校验失败：\n${shown.join("\n")}${more}`);
+  }, [editorMode, jsonDraft, jsonFormatError]);
 
   const updateActiveLineFromSelection = useCallback(() => {
     const element = textareaRef.current;
@@ -134,6 +234,18 @@ export function RightPanel({
           {jsonFormatError ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
               {jsonFormatError}
+            </div>
+          ) : null}
+
+          {schemaLoadError ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+              {schemaLoadError}
+            </div>
+          ) : null}
+
+          {schemaValidationError ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 whitespace-pre-wrap break-words">
+              {schemaValidationError}
             </div>
           ) : null}
 
