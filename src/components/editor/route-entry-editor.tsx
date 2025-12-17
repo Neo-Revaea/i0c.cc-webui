@@ -392,13 +392,33 @@ export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true
                 <button
                   type="button"
                   onClick={() => {
+                    if (!window.confirm("确定要删除这条规则吗？")) {
+                      return;
+                    }
+
                     const next = arrayValue.slice();
+                    if (next.length <= 1) {
+                      next[0] = "";
+                      onChange(next);
+                      return;
+                    }
+
                     next.splice(index, 1);
                     onChange(next);
                   }}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-rose-600 hover:bg-rose-50"
+                  title="删除规则"
+                  aria-label="删除规则"
                 >
-                  删除
+                  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2">
+                    <path
+                      d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M10 11v6" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M14 11v6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
               </div>
 
