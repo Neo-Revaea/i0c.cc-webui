@@ -13,15 +13,15 @@ export type SidebarProps = {
 
 export function Sidebar({ title, className, children, footer }: SidebarProps) {
   return (
-    <aside className={"w-full shrink-0 sm:max-w-sm h-full " + (className ?? "")}>
-      <div className="space-y-4 sm:sticky sm:top-28">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+    <aside className={"w-full shrink-0 sm:max-w-sm " + (className ?? "")}>
+      <div className="flex flex-col gap-4 sm:sticky sm:top-28 sm:max-h-[calc(100vh-10rem)]">
+        <div className="flex min-h-0 flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
           {title ? <h2 className="text-sm font-semibold text-slate-900">{title}</h2> : null}
-          <div className={title ? "mt-4" : ""}>{children}</div>
+          <div className={(title ? "mt-4 " : "") + "min-h-0 overflow-y-auto pr-1"}>{children}</div>
         </div>
 
         {footer ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+          <div className="shrink-0 rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
             {footer}
           </div>
         ) : null}

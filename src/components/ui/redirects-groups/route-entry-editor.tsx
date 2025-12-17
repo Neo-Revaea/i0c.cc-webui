@@ -1,9 +1,109 @@
 'use client';
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type RouteMode = "string" | "object" | "array";
+type RouteMode = "string" | "object";
 type DestinationKey = "target" | "to" | "url";
+
+type DropdownOption = {
+  value: string;
+  label: string;
+};
+
+function DropdownSelect({
+  value,
+  options,
+  onChange,
+  className,
+}: {
+  value: string;
+  options: DropdownOption[];
+  onChange: (next: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selected = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (rootRef.current && !rootRef.current.contains(target)) {
+        setOpen(false);
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className={"relative " + (className ?? "")}>
+      <button
+        type="button"
+        onClick={() => setOpen((previous) => !previous)}
+        className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-10 text-left text-sm text-slate-900 outline-none focus:border-slate-300"
+      >
+        {selected?.label ?? value}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open ? (
+        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+          <div className="max-h-60 overflow-auto py-1">
+            {options.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  className={
+                    "w-full px-3 py-2 text-left text-sm " +
+                    (isSelected
+                      ? "bg-slate-50 font-medium text-slate-900"
+                      : "text-slate-700 hover:bg-slate-50")
+                  }
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -28,9 +128,6 @@ function normalizePriority(value: unknown): string {
 }
 
 function getMode(value: unknown): RouteMode {
-  if (Array.isArray(value)) {
-    return "array";
-  }
   if (isRecord(value)) {
     return "object";
   }
@@ -78,27 +175,58 @@ export type RouteEntryEditorProps = {
 export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEditorProps) {
   const mode = useMemo(() => getMode(value), [value]);
 
+  const stringValue = mode === "string" ? asString(value) : "";
+  const configValue = mode === "object" && isRecord(value) ? value : null;
+
+  const stringDraftRef = useRef<string>(stringValue);
+  const objectDraftRef = useRef<Record<string, unknown> | null>(configValue);
+
+  useEffect(() => {
+    if (mode === "string") {
+      stringDraftRef.current = stringValue;
+    }
+  }, [mode, stringValue]);
+
+  useEffect(() => {
+    if (mode === "object" && configValue) {
+      objectDraftRef.current = configValue;
+    }
+  }, [configValue, mode]);
+
   const setMode = useCallback(
     (nextMode: RouteMode) => {
       if (nextMode === mode) {
         return;
       }
       if (nextMode === "string") {
+        const cached = stringDraftRef.current;
+        if (cached.trim() !== "") {
+          onChange(cached);
+          return;
+        }
+        if (configValue) {
+          const destinationKey = getDestinationKey(configValue);
+          onChange(asString(configValue[destinationKey]));
+          return;
+        }
         onChange("");
         return;
       }
       if (nextMode === "object") {
-        onChange(createEmptyConfig());
+        const cached = objectDraftRef.current;
+        if (cached) {
+          onChange(cached);
+          return;
+        }
+        const seed = createEmptyConfig();
+        const seededConfig =
+          stringValue.trim() === "" ? seed : setExclusiveDestination(seed, "target", stringValue.trim());
+        onChange(seededConfig);
         return;
       }
-      onChange([""]);
     },
-    [mode, onChange]
+    [configValue, mode, onChange, stringValue]
   );
-
-  const stringValue = mode === "string" ? asString(value) : "";
-  const configValue = mode === "object" && isRecord(value) ? value : null;
-  const arrayValue = mode === "array" && Array.isArray(value) ? value : null;
 
   const containerClassName = level > 0 ? "mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4" : "";
 
@@ -110,43 +238,53 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
           type="button"
           onClick={() => setMode("string")}
           className={
-            "rounded-lg border px-2 py-1 text-xs " +
+            "relative inline-flex items-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
             (mode === "string"
-              ? "border-slate-300 bg-white text-slate-900"
+              ? "border-slate-300 bg-white text-slate-900 pr-7"
               : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
           }
         >
-          字符串
+          快速配置
+          {mode === "string" ? (
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : null}
         </button>
         <button
           type="button"
           onClick={() => setMode("object")}
           className={
-            "rounded-lg border px-2 py-1 text-xs " +
+            "relative inline-flex items-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
             (mode === "object"
-              ? "border-slate-300 bg-white text-slate-900"
+              ? "border-slate-300 bg-white text-slate-900 pr-7"
               : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
           }
         >
-          对象
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("array")}
-          className={
-            "rounded-lg border px-2 py-1 text-xs " +
-            (mode === "array"
-              ? "border-slate-300 bg-white text-slate-900"
-              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
-          }
-        >
-          数组
+          详细配置
+          {mode === "object" ? (
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : null}
         </button>
       </div>
 
       {mode === "string" ? (
         <div className="mt-3">
-          <label className="block text-xs font-medium text-slate-600">目标（字符串快捷写法）</label>
+          <label className="block text-xs font-medium text-slate-600">目标地址</label>
           <input
             value={stringValue}
             onChange={(e) => onChange(e.target.value)}
@@ -161,48 +299,52 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-medium text-slate-600">type</label>
-              <select
-                value={(configValue.type as string | undefined) ?? "prefix"}
-                onChange={(e) => onChange({ ...configValue, type: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
-              >
-                <option value="prefix">prefix</option>
-                <option value="exact">exact</option>
-                <option value="proxy">proxy</option>
-              </select>
+              <div className="mt-1">
+                <DropdownSelect
+                  value={(configValue.type as string | undefined) ?? "prefix"}
+                  onChange={(next) => onChange({ ...configValue, type: next })}
+                  options={[
+                    { value: "prefix", label: "prefix" },
+                    { value: "exact", label: "exact" },
+                    { value: "proxy", label: "proxy" },
+                  ]}
+                />
+              </div>
             </div>
 
-            <div className="flex items-end">
-              <label className="inline-flex select-none items-center gap-2 text-sm text-slate-700">
+            <div>
+              <label className="block text-xs font-medium text-slate-600">appendPath</label>
+              <div className="mt-1 inline-flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-3 text-sm text-slate-900">
                 <input
                   type="checkbox"
                   checked={Boolean(configValue.appendPath)}
                   onChange={(e) => onChange({ ...configValue, appendPath: e.target.checked })}
-                  className="h-4 w-4 rounded border-slate-300"
+                  className="h-4 w-4 rounded border-slate-300 accent-slate-900"
                 />
-                appendPath
-              </label>
+                <span className="text-sm text-slate-700">启用</span>
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600">目标地址</label>
+              <label className="block text-xs font-medium text-slate-600">目标地址 （target、to、url作用都是一样的）</label>
               <div className="mt-1 flex gap-2">
-                <select
+                <DropdownSelect
+                  className="w-28 shrink-0"
                   value={getDestinationKey(configValue)}
-                  onChange={(e) => {
-                    const nextKey = e.target.value as DestinationKey;
+                  onChange={(next) => {
+                    const nextKey = next as DestinationKey;
                     const currentKey = getDestinationKey(configValue);
                     const currentValue = asString(configValue[currentKey]);
                     onChange(setExclusiveDestination(configValue, nextKey, currentValue));
                   }}
-                  className="w-28 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
-                >
-                  <option value="target">target</option>
-                  <option value="to">to</option>
-                  <option value="url">url</option>
-                </select>
+                  options={[
+                    { value: "target", label: "target" },
+                    { value: "to", label: "to" },
+                    { value: "url", label: "url" },
+                  ]}
+                />
                 <input
                   value={asString(configValue[getDestinationKey(configValue)])}
                   onChange={(e) => {
@@ -222,8 +364,13 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
                 onChange={(e) => {
                   const raw = e.target.value.trim();
                   const next = raw === "" ? undefined : raw;
-                  const { status, ...rest } = configValue;
-                  onChange(next === undefined ? rest : { ...rest, status: next });
+                  const nextConfig = { ...configValue };
+                  if (next === undefined) {
+                    delete nextConfig.status;
+                    onChange(nextConfig);
+                    return;
+                  }
+                  onChange({ ...nextConfig, status: next });
                 }}
                 placeholder="301"
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
@@ -239,8 +386,13 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
                 onChange={(e) => {
                   const raw = e.target.value.trim();
                   const next = raw === "" ? undefined : raw;
-                  const { priority, ...rest } = configValue;
-                  onChange(next === undefined ? rest : { ...rest, priority: next });
+                  const nextConfig = { ...configValue };
+                  if (next === undefined) {
+                    delete nextConfig.priority;
+                    onChange(nextConfig);
+                    return;
+                  }
+                  onChange({ ...nextConfig, priority: next });
                 }}
                 placeholder="0"
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
@@ -250,47 +402,7 @@ export function RouteEntryEditor({ value, onChange, level = 0 }: RouteEntryEdito
         </div>
       ) : null}
 
-      {mode === "array" && arrayValue ? (
-        <div className="mt-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-600">数组规则</span>
-            <button
-              type="button"
-              onClick={() => onChange([...arrayValue, ""])}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-            >
-              新增一条
-            </button>
-          </div>
 
-          <div className="mt-3 space-y-3">
-            {arrayValue.map((item, index) => (
-              <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-500">#{index + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => onChange(arrayValue.filter((_, i) => i !== index))}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-                  >
-                    删除
-                  </button>
-                </div>
-
-                <RouteEntryEditor
-                  value={item}
-                  onChange={(next) => {
-                    const copy = arrayValue.slice();
-                    copy[index] = next;
-                    onChange(copy);
-                  }}
-                  level={level + 1}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
