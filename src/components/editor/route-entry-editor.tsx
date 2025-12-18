@@ -289,68 +289,22 @@ export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true
 
   return (
     <div className={containerClassName}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-slate-500">规则类型</span>
-        <button
-          type="button"
-          onClick={() => setMode("string")}
-          className={
-            "relative inline-flex items-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
-            (mode === "string"
-              ? "border-slate-300 bg-white text-slate-900 pr-7"
-              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
-          }
-        >
-          快速配置
-          {mode === "string" ? (
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("object")}
-          className={
-            "relative inline-flex items-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
-            (mode === "object"
-              ? "border-slate-300 bg-white text-slate-900 pr-7"
-              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
-          }
-        >
-          详细配置
-          {mode === "object" ? (
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          ) : null}
-        </button>
+      <div className="space-y-2">
+        <span className="block text-xs font-medium text-slate-500">规则类型</span>
 
-        {allowArray ? (
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
-            onClick={() => setMode("array")}
+            onClick={() => setMode("string")}
             className={
-              "relative inline-flex items-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
-              (mode === "array"
+              "relative inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
+              (mode === "string"
                 ? "border-slate-300 bg-white text-slate-900 pr-7"
                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
             }
           >
-            多条规则
-            {mode === "array" ? (
+            快速配置
+            {mode === "string" ? (
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -362,7 +316,59 @@ export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true
               </svg>
             ) : null}
           </button>
-        ) : null}
+
+          <button
+            type="button"
+            onClick={() => setMode("object")}
+            className={
+              "relative inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
+              (mode === "object"
+                ? "border-slate-300 bg-white text-slate-900 pr-7"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
+            }
+          >
+            详细配置
+            {mode === "object" ? (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : null}
+          </button>
+
+          {allowArray ? (
+            <button
+              type="button"
+              onClick={() => setMode("array")}
+              className={
+                "relative inline-flex w-full items-center justify-center whitespace-nowrap rounded-lg border py-1 pl-3 pr-3 text-xs leading-none " +
+                (mode === "array"
+                  ? "border-slate-300 bg-white text-slate-900 pr-7"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")
+              }
+            >
+              多条规则
+              {mode === "array" ? (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : null}
+            </button>
+          ) : (
+            <div aria-hidden className="h-7" />
+          )}
+        </div>
       </div>
 
       {mode === "string" ? (

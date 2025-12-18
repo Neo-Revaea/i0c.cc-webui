@@ -60,7 +60,7 @@ export function GroupEntriesEditor({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-900">这个分组还没有规则</p>
-                <p className="mt-1 text-sm text-slate-500">点击右上角按钮新建一条规则</p>
+                <p className="mt-1 text-sm text-slate-500">点击按钮新建一条规则</p>
               </div>
             </div>
           </div>
