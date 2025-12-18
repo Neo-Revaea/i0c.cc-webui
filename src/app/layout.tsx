@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "i0c.cc",
-  description: "i0c.cc",
+  title: "i0c.cc Config Console",
+  description: "Manage redirects.json via WebUI",
   robots: {
     index: false,
     follow: false,
@@ -36,7 +36,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const locale = cookieStore.get("NEXT_LOCALE")?.value || "zh-CN";
+  const locale = cookieStore.get("NEXT_LOCALE")?.value || "en";
 
   return (
     <html lang={locale}>
