@@ -12,7 +12,7 @@ export function QRCodeButton({ pathKey, domain }: { pathKey: string; domain?: st
   const [isDropUp, setIsDropUp] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  const baseUrl = domain || process.env.NEXT_PUBLIC_SHORT_DOMAIN || "https://i0c.cc";
+  const baseUrl = domain || process.env.NEXT_PUBLIC_DOMAIN || "https://i0c.cc";
   const cleanPath = pathKey.startsWith('/') ? pathKey : `/${pathKey}`;
   const finalUrl = `${baseUrl}${cleanPath}`;
 
