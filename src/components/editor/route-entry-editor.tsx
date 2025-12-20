@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { QRCodeButton } from "@/components/qr-code";
+
 function LabelWithTooltip({ label, tooltip }: { label: string; tooltip: string }) {
   return (
     <div className="flex items-center gap-1.5 mb-1.5">
@@ -183,9 +185,10 @@ export type RouteEntryEditorProps = {
   onChange: (next: unknown) => void;
   level?: number;
   allowArray?: boolean;
+  pathKey?: string; 
 };
 
-export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true }: RouteEntryEditorProps) {
+export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true, pathKey = "" }: RouteEntryEditorProps) {
   const t = useTranslations("routeEntry");
 
   const mode = useMemo(() => getMode(value), [value]);
@@ -375,12 +378,15 @@ export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true
       {mode === "string" ? (
         <div className="mt-3">
           <LabelWithTooltip label={t("targetLabel")} tooltip={t("targetTooltip")} />
-          <input
-            value={stringValue}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={t("targetPlaceholder")}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
-          />
+          <div className="flex gap-2">
+            <input
+              value={stringValue}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={t("targetPlaceholder")}
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
+            />
+            {pathKey && <QRCodeButton pathKey={pathKey} />}
+          </div>
         </div>
       ) : null}
 
@@ -428,6 +434,7 @@ export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true
                   value={Array.isArray(item) ? "" : item}
                   allowArray={false}
                   level={level + 1}
+                  pathKey={pathKey} 
                   onChange={(nextItem) => {
                     const safeNext = Array.isArray(nextItem) ? "" : nextItem;
                     const next = arrayValue.slice();
@@ -529,6 +536,7 @@ export function RouteEntryEditor({ value, onChange, level = 0, allowArray = true
                         placeholder="https://example.com"
                         className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-300"
                       />
+                      {pathKey && <QRCodeButton pathKey={pathKey} />}
                     </div>
                   </div>
 

@@ -107,6 +107,7 @@ export function GroupEntriesEditor({
 
             <div className="mt-4">
               <RouteEntryEditor
+                pathKey={entry.key}
                 value={entry.value}
                 onChange={(next) => onUpdateEntryValue(group.id, entry.id, next)}
               />

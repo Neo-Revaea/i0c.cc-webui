@@ -97,5 +97,12 @@
       "priorityLabel": "Priority",
       "priorityTooltip": "Matching Priority\nSmaller number = higher priority",
       "priorityInvalid": "Must be an integer (e.g. 0, 10, -1)."
-    }
+    },
+  "qrCode": {
+    "openQRCode": "Generate QR code",
+    "faviconAlt": "Favicon",
+    "faviconLabel": "Favicon Logo",
+    "showFavicon": "Show favicon",
+    "hideFavicon": "Hide favicon"
+  }
 }

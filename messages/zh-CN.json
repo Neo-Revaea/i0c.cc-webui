@@ -97,5 +97,12 @@
       "priorityLabel": "priority",
       "priorityTooltip": "匹配优先级\n数字越小优先级越高",
       "priorityInvalid": "需为整数（例如 0、10、-1）。"
-    }
+    },
+  "qrCode": {
+    "openQRCode": "生成二维码",
+    "faviconAlt": "网站图标",
+    "faviconLabel": "Favicon 图标",
+    "showFavicon": "显示图标",
+    "hideFavicon": "隐藏图标"
+  }
 }
