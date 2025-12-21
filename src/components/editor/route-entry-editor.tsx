@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { QRCodeButton } from "@/components/qr-code";
+import { QRCodeButton } from "@/components/ui/qr-code";
 
 function LabelWithTooltip({ label, tooltip }: { label: string; tooltip: string }) {
   return (

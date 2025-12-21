@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import type { Session } from "next-auth";
 
-import { SignInPanel } from "@/components/sign-in-panel";
+import { SignInPanel } from "@/components/ui/sign-in-panel";
 import { authOptions } from "@/auth/config";
 import { RedirectsGroupsPage } from "@/components/redirects-groups/redirects-groups-page";
 
