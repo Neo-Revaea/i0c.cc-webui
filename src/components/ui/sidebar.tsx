@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
-import type { RedirectGroup } from "@/lib/redirects-groups/model";
+import type { RedirectGroup } from "@/composables/redirects-groups/model";
 
 export type SidebarProps = {
   title?: string;

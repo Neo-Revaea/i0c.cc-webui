@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { GroupTree } from "@/components/ui/sidebar";
-import type { RedirectGroup } from "@/lib/redirects-groups/model";
+import type { RedirectGroup } from "@/composables/redirects-groups/model";
 
 export type ManagerSidebarBodyProps = {
   rootGroup: RedirectGroup;

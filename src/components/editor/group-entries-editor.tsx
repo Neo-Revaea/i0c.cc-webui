@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import type { RedirectGroup } from "@/lib/redirects-groups/model";
+import type { RedirectGroup } from "@/composables/redirects-groups/model";
 
 import { RouteEntryEditor } from "@/components/editor/route-entry-editor";
 

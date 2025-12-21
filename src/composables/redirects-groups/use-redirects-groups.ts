@@ -1,56 +1,51 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { fetchRedirectsConfig, saveRedirectsConfig } from "@/lib/redirects-groups/api";
-import type { RedirectGroup } from "@/lib/redirects-groups/model";
-import { createEmptyEntry, createEmptyGroup } from "@/lib/redirects-groups/model";
-import { buildConfig, parseInitialContent } from "@/lib/redirects-groups/serialization";
 import {
-  ensureUniqueGroupName,
-  findGroupById,
-  findParentOf,
-  removeGroupById,
-  updateGroupById
-} from "@/lib/redirects-groups/state";
-
-type HistorySnapshot = {
-  rootGroup: RedirectGroup;
-  selectedGroupId: string | null;
-};
-
-function cloneSnapshot(value: HistorySnapshot): HistorySnapshot {
-  const sc = (globalThis as unknown as { structuredClone?: (v: unknown) => unknown }).structuredClone;
-  if (typeof sc === "function") {
-    return sc(value) as HistorySnapshot;
-  }
-  return JSON.parse(JSON.stringify(value)) as HistorySnapshot;
-}
-
-const MAX_HISTORY = 50;
+  addEntry as addEntryState,
+  addGroup as addGroupState,
+  applyParsedConfig,
+  applySnapshot,
+  beginRename as beginRenameState,
+  cancelRename as cancelRenameState,
+  commitRename as commitRenameState,
+  createInitialGroupsEditorState,
+  getGroupById,
+  getSelectedGroup,
+  removeEntry as removeEntryState,
+  removeGroupConfirmed,
+  selectGroup as selectGroupState,
+  toSnapshot,
+  updateEntryKey as updateEntryKeyState,
+  updateEntryValue as updateEntryValueState,
+  type GroupsSnapshot,
+} from "./editor-state";
+import { useRedirectsConfigFile } from "./config-file";
+import { useUndoRedo } from "./history";
+import { buildConfig, parseInitialContent } from "./serialization";
 
 export function useRedirectsGroups() {
   const tGroups = useTranslations("groups");
-
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [editorState, setEditorState] = useState(createInitialGroupsEditorState);
+  const configFile = useRedirectsConfigFile({
+    fallbackLoadErrorText: tGroups("loadFail"),
+    fallbackSaveErrorText: tGroups("saveFail"),
+    saveOkText: tGroups("saveOk"),
+    commitMessage: "Update groups via WebUI",
+  });
 
-  const [slotsKey, setSlotsKey] = useState("slots");
-  const [baseConfig, setBaseConfig] = useState<Record<string, unknown>>({});
-  const [rootGroup, setRootGroup] = useState(() => createEmptyGroup("slots"));
-  const [sha, setSha] = useState<string>("");
+  const loadConfig = configFile.load;
+  const saveConfig = configFile.save;
 
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState<string>("");
-
-  const [undoStack, setUndoStack] = useState<HistorySnapshot[]>([]);
-  const [redoStack, setRedoStack] = useState<HistorySnapshot[]>([]);
-
-  const [resultMessage, setResultMessage] = useState<string | null>(null);
-  const [lastCommitUrl, setLastCommitUrl] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const { canUndo, canRedo, pushCurrentSnapshot, undo, redo, resetHistory } = useUndoRedo<GroupsSnapshot>({
+    maxHistory: 50,
+    getCurrentSnapshot: () => toSnapshot(editorState),
+    applySnapshot: (snapshot) => setEditorState((prev) => applySnapshot(prev, snapshot)),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -58,29 +53,18 @@ export function useRedirectsGroups() {
     async function run() {
       setIsLoading(true);
       setLoadError(null);
-      setResultMessage(null);
-      setLastCommitUrl(null);
 
       try {
-        const data = await fetchRedirectsConfig({
-          fallbackLoadErrorText: tGroups("loadFail"),
-        });
-        const parsed = parseInitialContent(data.config.content);
+        const content = await loadConfig();
+        const parsed = parseInitialContent(content);
 
         if (cancelled) {
           return;
         }
 
-        setSlotsKey(parsed.slotsKey);
-        setBaseConfig(parsed.baseConfig);
-        setRootGroup(parsed.rootGroup);
-        setSha(data.config.sha);
+        setEditorState((prev) => applyParsedConfig(prev, parsed));
 
-        setUndoStack([]);
-        setRedoStack([]);
-
-        const initialSelected = parsed.rootGroup.children.at(0)?.id ?? parsed.rootGroup.id;
-        setSelectedGroupId(initialSelected);
+        resetHistory();
       } catch (error) {
         if (!cancelled) {
           setLoadError(error instanceof Error ? error.message : tGroups("loadFail"));
@@ -96,181 +80,63 @@ export function useRedirectsGroups() {
     return () => {
       cancelled = true;
     };
-  }, [tGroups]);
-
-  const canUndo = undoStack.length > 0;
-  const canRedo = redoStack.length > 0;
-
-  const pushUndoSnapshot = useCallback((snapshot: HistorySnapshot) => {
-    setUndoStack((prev) => {
-      const next = [...prev, cloneSnapshot(snapshot)];
-      return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
-    });
-    setRedoStack([]);
-  }, []);
-
-  const undo = useCallback(() => {
-    setUndoStack((prevUndo) => {
-      if (prevUndo.length === 0) {
-        return prevUndo;
-      }
-
-      const snapshot = prevUndo[prevUndo.length - 1];
-      const nextUndo = prevUndo.slice(0, -1);
-
-      setRedoStack((prevRedo) => [
-        cloneSnapshot({ rootGroup, selectedGroupId }),
-        ...prevRedo,
-      ]);
-
-      setRootGroup(cloneSnapshot(snapshot).rootGroup);
-      setSelectedGroupId(cloneSnapshot(snapshot).selectedGroupId);
-      setEditingGroupId(null);
-      setEditingName("");
-
-      return nextUndo;
-    });
-  }, [rootGroup, selectedGroupId]);
-
-  const redo = useCallback(() => {
-    setRedoStack((prevRedo) => {
-      if (prevRedo.length === 0) {
-        return prevRedo;
-      }
-
-      const snapshot = prevRedo[0];
-      const nextRedo = prevRedo.slice(1);
-
-      setUndoStack((prevUndo) => {
-        const next = [...prevUndo, cloneSnapshot({ rootGroup, selectedGroupId })];
-        return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
-      });
-
-      setRootGroup(cloneSnapshot(snapshot).rootGroup);
-      setSelectedGroupId(cloneSnapshot(snapshot).selectedGroupId);
-      setEditingGroupId(null);
-      setEditingName("");
-
-      return nextRedo;
-    });
-  }, [rootGroup, selectedGroupId]);
+  }, [loadConfig, resetHistory, tGroups]);
 
   const selectedGroup = useMemo(() => {
-    if (!selectedGroupId) {
-      return null;
-    }
-    return findGroupById(rootGroup, selectedGroupId);
-  }, [rootGroup, selectedGroupId]);
+    return getSelectedGroup(editorState);
+  }, [editorState]);
+
+  const slotsKey = editorState.slotsKey;
+  const baseConfig = editorState.baseConfig;
+  const rootGroup = editorState.rootGroup;
+  const selectedGroupId = editorState.selectedGroupId;
+  const editingGroupId = editorState.editingGroupId;
+  const editingName = editorState.editingName;
 
   const selectGroup = useCallback((groupId: string) => {
-    setSelectedGroupId(groupId);
+    setEditorState((prev) => selectGroupState(prev, groupId));
   }, []);
 
-  const beginRename = useCallback(
-    (groupId: string) => {
-      const group = findGroupById(rootGroup, groupId);
-      if (!group) {
-        return;
-      }
-      setEditingGroupId(groupId);
-      setEditingName(group.name);
-    },
-    [rootGroup]
-  );
+  const beginRename = useCallback((groupId: string) => {
+    setEditorState((prev) => beginRenameState(prev, groupId));
+  }, []);
 
   const cancelRename = useCallback(() => {
-    setEditingGroupId(null);
-    setEditingName("");
+    setEditorState((prev) => cancelRenameState(prev));
   }, []);
 
   const commitRename = useCallback(
     (groupId: string) => {
-      const parent = findParentOf(rootGroup, groupId);
-      if (!parent) {
-        cancelRename();
-        return;
-      }
-
-      const nextName = ensureUniqueGroupName(parent, groupId, editingName, tGroups("newGroup"));
-      pushUndoSnapshot({ rootGroup, selectedGroupId });
-      setRootGroup((current) => {
-        const [updated] = updateGroupById(current, groupId, (group) => ({ ...group, name: nextName }));
-        return updated;
-      });
-
-      cancelRename();
+      pushCurrentSnapshot();
+      setEditorState((prev) => commitRenameState(prev, groupId, tGroups("newGroup")));
     },
-    [cancelRename, editingName, pushUndoSnapshot, rootGroup, selectedGroupId, tGroups]
+    [pushCurrentSnapshot, tGroups]
   );
 
   const addGroup = useCallback((parentId: string) => {
-    pushUndoSnapshot({ rootGroup, selectedGroupId });
-    setRootGroup((current) => {
-      const parent = findGroupById(current, parentId);
-      if (!parent) {
-        return current;
-      }
-
-      const name = ensureUniqueGroupName(parent, null, tGroups("newGroup"), tGroups("newGroup"));
-      const group = createEmptyGroup(name);
-
-      const [updated] = updateGroupById(current, parentId, (g) => ({
-        ...g,
-        children: [...g.children, group]
-      }));
-
-      setSelectedGroupId(group.id);
-      setEditingGroupId(group.id);
-      setEditingName(group.name);
-
-      return updated;
-    });
-  }, [pushUndoSnapshot, rootGroup, selectedGroupId, tGroups]);
+    pushCurrentSnapshot();
+    setEditorState((prev) => addGroupState(prev, parentId, tGroups("newGroup")));
+  }, [pushCurrentSnapshot, tGroups]);
 
   const addEntry = useCallback((groupId: string) => {
-    pushUndoSnapshot({ rootGroup, selectedGroupId });
-    setRootGroup((current) => {
-      const [updated] = updateGroupById(current, groupId, (group) => ({
-        ...group,
-        entries: [...group.entries, createEmptyEntry()]
-      }));
-      return updated;
-    });
-  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
+    pushCurrentSnapshot();
+    setEditorState((prev) => addEntryState(prev, groupId));
+  }, [pushCurrentSnapshot]);
 
   const removeEntry = useCallback((groupId: string, entryId: string) => {
-    pushUndoSnapshot({ rootGroup, selectedGroupId });
-    setRootGroup((current) => {
-      const [updated] = updateGroupById(current, groupId, (group) => {
-        const nextEntries = group.entries.filter((entry) => entry.id !== entryId);
-        const normalizedEntries = nextEntries.length === 0 && group.children.length === 0 ? [createEmptyEntry()] : nextEntries;
-        return { ...group, entries: normalizedEntries };
-      });
-      return updated;
-    });
-  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
+    pushCurrentSnapshot();
+    setEditorState((prev) => removeEntryState(prev, groupId, entryId));
+  }, [pushCurrentSnapshot]);
 
   const updateEntryKey = useCallback((groupId: string, entryId: string, nextKey: string) => {
-    pushUndoSnapshot({ rootGroup, selectedGroupId });
-    setRootGroup((current) => {
-      const [updated] = updateGroupById(current, groupId, (group) => ({
-        ...group,
-        entries: group.entries.map((entry) => (entry.id === entryId ? { ...entry, key: nextKey } : entry))
-      }));
-      return updated;
-    });
-  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
+    pushCurrentSnapshot();
+    setEditorState((prev) => updateEntryKeyState(prev, groupId, entryId, nextKey));
+  }, [pushCurrentSnapshot]);
 
   const updateEntryValue = useCallback((groupId: string, entryId: string, nextValue: unknown) => {
-    pushUndoSnapshot({ rootGroup, selectedGroupId });
-    setRootGroup((current) => {
-      const [updated] = updateGroupById(current, groupId, (group) => ({
-        ...group,
-        entries: group.entries.map((entry) => (entry.id === entryId ? { ...entry, value: nextValue } : entry))
-      }));
-      return updated;
-    });
-  }, [pushUndoSnapshot, rootGroup, selectedGroupId]);
+    pushCurrentSnapshot();
+    setEditorState((prev) => updateEntryValueState(prev, groupId, entryId, nextValue));
+  }, [pushCurrentSnapshot]);
 
   const removeGroup = useCallback(
     (groupId: string) => {
@@ -278,7 +144,7 @@ export function useRedirectsGroups() {
         return;
       }
 
-      const target = findGroupById(rootGroup, groupId);
+      const target = getGroupById(editorState, groupId);
       const label = target?.name?.trim() || tGroups("unnamed");
 
       const ok = window.confirm(tGroups("confirmDelete", { label }));
@@ -286,74 +152,28 @@ export function useRedirectsGroups() {
         return;
       }
 
-      pushUndoSnapshot({ rootGroup, selectedGroupId });
-      setRootGroup((current) => {
-        const [updated, changed] = removeGroupById(current, groupId);
-        if (!changed) {
-          return current;
-        }
-
-        setSelectedGroupId((prev) => {
-          if (prev !== groupId) {
-            return prev;
-          }
-          return updated.id;
-        });
-
-        return updated;
-      });
-
-      setEditingGroupId((prev) => (prev === groupId ? null : prev));
-      setEditingName((prev) => (editingGroupId === groupId ? "" : prev));
+      pushCurrentSnapshot();
+      setEditorState((prev) => removeGroupConfirmed(prev, groupId));
     },
-    [editingGroupId, pushUndoSnapshot, rootGroup, selectedGroupId, tGroups]
+    [editorState, pushCurrentSnapshot, rootGroup, tGroups]
   );
 
   const applyJson = useCallback(
     (content: string) => {
       const parsed = parseInitialContent(content);
 
-      pushUndoSnapshot({ rootGroup, selectedGroupId });
+      pushCurrentSnapshot();
 
-      setSlotsKey(parsed.slotsKey);
-      setBaseConfig(parsed.baseConfig);
-      setRootGroup(parsed.rootGroup);
-
-      const nextSelected = parsed.rootGroup.children.at(0)?.id ?? parsed.rootGroup.id;
-      setSelectedGroupId(nextSelected);
-      setEditingGroupId(null);
-      setEditingName("");
+      setEditorState((prev) => applyParsedConfig(prev, parsed));
     },
-    [pushUndoSnapshot, rootGroup, selectedGroupId]
+    [pushCurrentSnapshot]
   );
 
   const save = useCallback((overrideContent?: string) => {
-    startTransition(async () => {
-      setResultMessage(null);
-      setLastCommitUrl(null);
-
-      try {
-        const config = buildConfig(rootGroup, baseConfig, slotsKey);
-        const content = overrideContent ?? JSON.stringify(config, null, 2);
-        const result = await saveRedirectsConfig(
-          {
-            content,
-            sha,
-            message: "Update groups via WebUI"
-          },
-          {
-            fallbackSaveErrorText: tGroups("saveFail")
-          }
-        );
-
-        setSha(result.sha);
-        setLastCommitUrl(result.commitUrl);
-        setResultMessage(tGroups("saveOk"));
-      } catch (error) {
-        setResultMessage(error instanceof Error ? error.message : tGroups("saveFail"));
-      }
-    });
-  }, [baseConfig, rootGroup, sha, slotsKey, startTransition, tGroups]);
+    const config = buildConfig(rootGroup, baseConfig, slotsKey);
+    const content = overrideContent ?? JSON.stringify(config, null, 2);
+    saveConfig(content);
+  }, [baseConfig, rootGroup, saveConfig, slotsKey]);
 
   const previewJson = useMemo(() => {
     try {
@@ -376,7 +196,7 @@ export function useRedirectsGroups() {
     selectGroup,
     editingGroupId,
     editingName,
-    setEditingName,
+    setEditingName: (value: string) => setEditorState((prev) => ({ ...prev, editingName: value })),
     beginRename,
     cancelRename,
     commitRename,
@@ -390,11 +210,11 @@ export function useRedirectsGroups() {
     canRedo,
     undo,
     redo,
-    isPending,
+    isPending: configFile.isPending,
     save,
     applyJson,
     previewJson,
-    resultMessage,
-    lastCommitUrl
+    resultMessage: configFile.resultMessage,
+    lastCommitUrl: configFile.lastCommitUrl
   };
 }
