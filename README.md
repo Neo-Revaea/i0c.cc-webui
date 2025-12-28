@@ -4,6 +4,8 @@
 
 i0c.cc WebUI is a management panel based on Next.js 16, designed for online editing of `redirects.json` after logging in via GitHub OAuth. When saving changes, it calls the GitHub Contents API to create commits on the specified branch of the target repository, preserving the history.
 
+**Better together: Use this with [i0c.cc](https://github.com/IGCyukira/i0c.cc) for the ultimate serverless redirection management.**
+
 This project provides two editing modes:
 
 - Visual rule editing (group tree + form)
