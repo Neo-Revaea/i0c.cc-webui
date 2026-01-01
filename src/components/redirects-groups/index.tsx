@@ -4,10 +4,11 @@ import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Sidebar } from "@/components/ui/sidebar";
-import { ContentSkeleton, SidebarSkeletonBody, SidebarSkeletonFooter } from "@/components/ui/skeletons";
+import { ContentSkeleton, SidebarSkeletonBody, SidebarSkeletonCatalog, SidebarSkeletonFooter } from "@/components/ui/skeletons";
 import { GroupEntriesEditor } from "@/components/editor/group-entries-editor";
 import { RightPanel } from "@/components/editor/right-panel";
 import { useRedirectsGroups } from "@/composables/redirects-groups";
+import { RouteEntriesCatalog } from "@/components/redirects-groups/manager-sidebar-catalog";
 
 import { ManagerSidebarBody } from "./manager-sidebar-body";
 import { ManagerSidebarFooter } from "./manager-sidebar-footer";
@@ -22,6 +23,7 @@ export function RedirectsGroupsManager({
   onMobileSidebarOpenChange,
 }: RedirectsGroupsManagerProps) {
   const tGroups = useTranslations("groups");
+  const tEntries = useTranslations("entries");
   const tEditor = useTranslations("editor");
   const tCommon = useTranslations("common");
 
@@ -107,10 +109,18 @@ export function RedirectsGroupsManager({
   if (isLoading) {
     return (
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row">
-        <div className="hidden sm:[@media(min-height:600px)]:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
-          <Sidebar footer={<SidebarSkeletonFooter />} className="h-full">
-            <SidebarSkeletonBody />
-          </Sidebar>
+        <div className="hidden lg:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
+          <div className="flex min-h-0 flex-col gap-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)]">
+            <Sidebar>
+              <SidebarSkeletonBody />
+            </Sidebar>
+            <div className="hidden lg:[@media(min-height:700px)]:flex shrink-0 max-h-[30vh] rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+              <SidebarSkeletonCatalog />
+            </div>
+            <div className="flex shrink-0 flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+              <SidebarSkeletonFooter />
+            </div>
+          </div>
         </div>
         <section className="order-2 min-w-0 flex-1">
           <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-lg">
@@ -124,8 +134,8 @@ export function RedirectsGroupsManager({
   if (loadError) {
     return (
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row">
-        <div className="hidden sm:[@media(min-height:600px)]:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
-          <Sidebar title={tGroups("group")} className="h-full">
+        <div className="hidden lg:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
+          <Sidebar title={tGroups("group")}>
             <div className="text-sm text-slate-600">{tGroups("cannotLoad")}</div>
           </Sidebar>
         </div>
@@ -137,16 +147,18 @@ export function RedirectsGroupsManager({
   }
 
   const sidebarFooterNode = (
-    <ManagerSidebarFooter
-      canUndo={canUndo}
-      canRedo={canRedo}
-      isPending={isPending}
-      onUndo={undo}
-      onRedo={redo}
-      onSave={handleSave}
-      resultMessage={resultMessage}
-      lastCommitUrl={lastCommitUrl}
-    />
+    <div className="flex shrink-0 flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+      <ManagerSidebarFooter
+        canUndo={canUndo}
+        canRedo={canRedo}
+        isPending={isPending}
+        onUndo={undo}
+        onRedo={redo}
+        onSave={handleSave}
+        resultMessage={resultMessage}
+        lastCommitUrl={lastCommitUrl}
+      />
+    </div>
   );
 
   const sidebarBodyNode = (
@@ -166,60 +178,108 @@ export function RedirectsGroupsManager({
     />
   );
 
+  const catalogNode = selectedGroup && selectedGroup.entries.length > 0 ? (
+    <RouteEntriesCatalog
+      entries={selectedGroup.entries}
+      title={tEditor("entries") ?? "Entries"}
+      className="hidden lg:[@media(min-height:700px)]:flex shrink-0 max-h-[30vh] rounded-3xl border border-slate-200 bg-white shadow-lg"
+      onAddRule={() => addEntry(selectedGroup.id)}
+      addRuleLabel={tEntries("addRule")}
+    />
+  ) : null;
+
+  const desktopCompactCatalogNode = selectedGroup && selectedGroup.entries.length > 0 ? (
+    <RouteEntriesCatalog
+      entries={selectedGroup.entries}
+      title={tEditor("entries") ?? "Entries"}
+      variant="collapsible"
+      wrapperClassName="hidden lg:[@media(max-height:699px)]:block shrink-0"
+      collapsibleContentClassName="max-h-[40vh]"
+      onAddRule={() => addEntry(selectedGroup.id)}
+      addRuleLabel={tEntries("addRule")}
+    />
+  ) : null;
+
+  const mobileCatalogNode = selectedGroup && selectedGroup.entries.length > 0 ? (
+    <RouteEntriesCatalog
+      entries={selectedGroup.entries}
+      title={tEditor("entries") ?? "Entries"}
+      variant="collapsible"
+      wrapperClassName="lg:hidden sticky top-20 z-30 mx-auto w-full max-w-6xl px-6"
+      collapsibleContentClassName="max-h-[40vh]"
+      onAddRule={() => addEntry(selectedGroup.id)}
+      addRuleLabel={tEntries("addRule")}
+    />
+  ) : null;
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row">
+    <>
+      {mobileCatalogNode}
 
-      <div className="hidden sm:[@media(min-height:600px)]:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
-        <Sidebar footer={sidebarFooterNode} className="h-full">
-          {sidebarBodyNode}
-        </Sidebar>
-      </div>
-
-      {showMobileSidebar ? (
-        <div className="fixed inset-0 z-40 bg-slate-50 sm:[@media(min-height:600px)]:hidden">
-          <div className="h-full overflow-y-auto px-6 pb-6 pt-24">
-            <div className="mx-auto max-w-6xl space-y-6">
-              <Sidebar footer={sidebarFooterNode}>
-                {sidebarBodyNode}
-              </Sidebar>
-              <button
-                type="button"
-                onClick={closeMobileSidebar}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"
-              >
-                {tCommon("close")}
-              </button>
-            </div>
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row">
+        <div className="hidden lg:block order-1 w-full sm:w-64 lg:w-80 shrink-0">
+          <div className="flex min-h-0 flex-col gap-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)]">
+            <Sidebar>
+              {sidebarBodyNode}
+            </Sidebar>
+            {desktopCompactCatalogNode}
+            {catalogNode}
+            {sidebarFooterNode}
           </div>
         </div>
-      ) : null}
 
-      <section className="order-2 min-w-0 flex-1">
-        <RightPanel
-          editorMode={editorMode}
-          onEnterRulesMode={enterRulesMode}
-          onEnterJsonMode={enterJsonMode}
-          jsonDraft={jsonDraft}
-          onJsonDraftChange={setJsonDraft}
-          jsonError={jsonError}
-          rulesContent={
-            selectedGroup ? (
-              <GroupEntriesEditor
-                group={selectedGroup}
-                onAddEntry={addEntry}
-                onRemoveEntry={removeEntry}
-                onUpdateEntryKey={updateEntryKey}
-                onUpdateEntryValue={updateEntryValue}
-              />
-            ) : (
-              <div>
-                <h1 className="text-lg font-semibold text-slate-900">{tGroups("group")}</h1>
-                <p className="mt-1 text-sm text-slate-500">{tGroups("selectHint")}</p>
+        {showMobileSidebar ? (
+          <div className="fixed inset-0 z-40 bg-slate-50 lg:hidden">
+            <div className="h-full px-6 pb-6 pt-24">
+              <div
+                className="mx-auto h-full max-w-6xl overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent"
+                style={{ scrollbarGutter: "stable" }}
+              >
+                <div className="space-y-6">
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg">
+                    {sidebarBodyNode}
+                  </div>
+                  {sidebarFooterNode}
+                  <button
+                    type="button"
+                    onClick={closeMobileSidebar}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"
+                  >
+                    {tCommon("close")}
+                  </button>
+                </div>
               </div>
-            )
-          }
-        />
-      </section>
-    </div>
+            </div>
+          </div>
+        ) : null}
+
+        <section className="order-2 min-w-0 flex-1">
+          <RightPanel
+            editorMode={editorMode}
+            onEnterRulesMode={enterRulesMode}
+            onEnterJsonMode={enterJsonMode}
+            jsonDraft={jsonDraft}
+            onJsonDraftChange={setJsonDraft}
+            jsonError={jsonError}
+            rulesContent={
+              selectedGroup ? (
+                <GroupEntriesEditor
+                  group={selectedGroup}
+                  onAddEntry={addEntry}
+                  onRemoveEntry={removeEntry}
+                  onUpdateEntryKey={updateEntryKey}
+                  onUpdateEntryValue={updateEntryValue}
+                />
+              ) : (
+                <div>
+                  <h1 className="text-lg font-semibold text-slate-900">{tGroups("group")}</h1>
+                  <p className="mt-1 text-sm text-slate-500">{tGroups("selectHint")}</p>
+                </div>
+              )
+            }
+          />
+        </section>
+      </div>
+    </>
   );
 }

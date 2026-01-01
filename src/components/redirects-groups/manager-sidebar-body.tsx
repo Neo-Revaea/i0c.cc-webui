@@ -37,7 +37,7 @@ export function ManagerSidebarBody({
 
   return (
     <>
-      <div className="sticky top-0 z-10 bg-white pb-3">
+      <div className="bg-white pb-3 border-b border-slate-200 lg:sticky lg:top-0 z-10">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-900">{tGroups("manager")}</h2>
           <button

@@ -70,7 +70,7 @@ export function GroupEntriesEditor({
           </div>
         ) : null}
         {group.entries.map((entry) => (
-          <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div key={entry.id} id={`entry-${entry.id}`} className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex items-end gap-3">
               <div className="min-w-0 flex-1">
                 <label className="block text-xs font-medium text-slate-600">{t("pathKey")}</label>

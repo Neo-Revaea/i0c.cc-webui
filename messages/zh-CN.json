@@ -61,6 +61,7 @@
     "deleteRule": "删除规则"
   },
   "editor": {
+    "entries": "条目目录",
     "rules": "规则编辑",
     "json": "JSON 编辑",
     "jsonPreferred": "保存将以此 JSON 为准",

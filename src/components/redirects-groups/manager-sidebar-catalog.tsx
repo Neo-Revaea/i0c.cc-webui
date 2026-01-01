@@ -1,0 +1,185 @@
+'use client';
+
+import type { RedirectEntry } from "@/composables/redirects-groups/model";
+
+export type RouteEntriesCatalogProps = {
+  entries: RedirectEntry[];
+  className?: string;
+  hideHeader?: boolean;
+  title?: string;
+  variant?: "plain" | "collapsible";
+  wrapperClassName?: string;
+  collapsibleContentClassName?: string;
+  onAddRule?: () => void;
+  addRuleLabel?: string;
+};
+
+export function RouteEntriesCatalog({
+  entries,
+  className,
+  hideHeader,
+  title,
+  variant = "plain",
+  wrapperClassName,
+  collapsibleContentClassName,
+  onAddRule,
+  addRuleLabel,
+}: RouteEntriesCatalogProps) {
+  if (!entries.length) {
+    return null;
+  }
+
+  const headerTitle = title ?? "Entries";
+
+  const renderEntryIcon = (key: string) => {
+    if (!key || key === "/") {
+      return (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-4 w-4 shrink-0 text-slate-500"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="m3 10.5 9-6.5 9 6.5V20a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-4h-4v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    }
+
+    if (key.endsWith("/")) {
+      return (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className="h-4 w-4 shrink-0 text-slate-500"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M3 7a2 2 0 0 1 2-2h6l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    }
+
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        className="h-4 w-4 shrink-0 text-slate-500"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M6 4h9l3 3v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M15 4v3h3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M9 12h6m-6 4h4" strokeLinecap="round" />
+      </svg>
+    );
+  };
+
+  const handleJump = (entryId: string) => {
+    const target = document.getElementById(`entry-${entryId}`);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const list = (
+    <div
+      className={[
+        "flex flex-col min-h-0 p-6",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {hideHeader ? null : (
+        <div className="shrink-0 mb-3 border-b border-slate-200 pb-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-900">{headerTitle}</h2>
+            <div className="flex items-center gap-2">
+              <span className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500">{entries.length}</span>
+              {onAddRule ? (
+                <button
+                  type="button"
+                  onClick={onAddRule}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 6v12m6-6H6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {addRuleLabel ?? "新增规则"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="flex-1 min-h-0 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent" style={{ scrollbarGutter: "stable" }}>
+        <ul className="space-y-1 text-sm text-slate-700">
+          {entries.map((entry) => (
+            <li key={entry.id}>
+              <button
+                type="button"
+                onClick={() => handleJump(entry.id)}
+                className="w-full truncate rounded-lg px-2 py-1 text-left hover:bg-slate-50"
+                title={entry.key || "/"}
+              >
+                <span className="inline-flex min-w-0 items-center gap-2 text-sm text-slate-700">
+                  {renderEntryIcon(entry.key)}
+                  <span className="block min-w-0 truncate">{entry.key || "/"}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+
+if (variant === "collapsible") {
+    return (
+      <div className={wrapperClassName}>
+        <details className="group relative rounded-2xl border border-slate-200 bg-white shadow-lg">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">{headerTitle}</span>
+            <span className="flex items-center gap-2 text-xs text-slate-600">
+              <span className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-500">
+                {entries.length}
+              </span>
+              <svg
+                className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </summary>
+          
+          <div
+            className={[
+              "absolute left-0 right-0 top-full z-10 mt-2 hidden group-open:block",
+              "rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden",
+              "p-1",
+              collapsibleContentClassName, 
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <div className="max-h-[40vh] overflow-y-auto rounded-xl scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+              <RouteEntriesCatalog
+                entries={entries}
+                hideHeader
+                title={headerTitle}
+                className={["!p-2", className].filter(Boolean).join(" ")}
+              />
+            </div>
+          </div>
+        </details>
+      </div>
+    );
+  }
+
+  return list;
+}
