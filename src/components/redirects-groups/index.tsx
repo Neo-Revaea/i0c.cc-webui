@@ -209,6 +209,8 @@ export function RedirectsGroupsManager({
       collapsibleContentClassName="max-h-[40vh]"
       onAddRule={() => addEntry(selectedGroup.id)}
       addRuleLabel={tEntries("addRule")}
+      onRemoveEntry={(entryId) => removeEntry(selectedGroup.id, entryId)}
+      showLocateButton
     />
   ) : null;
 
