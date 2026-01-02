@@ -7,6 +7,13 @@ const configPath = process.env.GITHUB_CONFIG_PATH ?? "redirects.json";
 
 const apiBase = "https://api.github.com";
 
+type RepoTarget = {
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+};
+
 export interface RedirectConfigPayload {
   content: string;
   sha: string;
@@ -41,15 +48,104 @@ function buildHeaders(accessToken: string): HeadersInit {
   } satisfies Record<string, string>;
 }
 
-function ensureRepoConfig(): { owner: string; repo: string; url: string } {
+function encodeGitHubPath(path: string): string {
+  return path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function parseGitHubSourceUrl(sourceUrl: string): RepoTarget {
+  let url: URL;
+  try {
+    url = new URL(sourceUrl);
+  } catch {
+    throw new Error("Invalid config URL.");
+  }
+
+  const host = url.hostname.toLowerCase();
+  const parts = url.pathname.split("/").filter(Boolean);
+
+  const ensureJsonPath = (path: string) => {
+    if (!/\.json$/i.test(path)) {
+      throw new Error("Config URL must point to a .json file.");
+    }
+    return path;
+  };
+
+  if (host === "github.com" || host === "www.github.com") {
+    // https://github.com/{owner}/{repo}/blob/{branch}/{path...}
+    // https://github.com/{owner}/{repo}/raw/{branch}/{path...}
+    const [repoOwner, repoName, mode, repoBranch, ...rest] = parts;
+    if (!repoOwner || !repoName || !mode || !repoBranch || rest.length === 0) {
+      throw new Error("Unsupported GitHub config URL.");
+    }
+    if (mode !== "blob" && mode !== "raw") {
+      throw new Error("Unsupported GitHub config URL.");
+    }
+    return {
+      owner: repoOwner,
+      repo: repoName,
+      branch: repoBranch,
+      path: ensureJsonPath(rest.join("/"))
+    };
+  }
+
+  if (host === "raw.githubusercontent.com") {
+    // https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path...}
+    const [repoOwner, repoName, repoBranch, ...rest] = parts;
+    if (!repoOwner || !repoName || !repoBranch || rest.length === 0) {
+      throw new Error("Unsupported GitHub config URL.");
+    }
+    return {
+      owner: repoOwner,
+      repo: repoName,
+      branch: repoBranch,
+      path: ensureJsonPath(rest.join("/"))
+    };
+  }
+
+  if (host === "api.github.com") {
+    // https://api.github.com/repos/{owner}/{repo}/contents/{path...}?ref={branch}
+    const [reposKeyword, repoOwner, repoName, contentsKeyword, ...rest] = parts;
+    if (reposKeyword !== "repos" || contentsKeyword !== "contents" || !repoOwner || !repoName || rest.length === 0) {
+      throw new Error("Unsupported GitHub config URL.");
+    }
+    const ref = url.searchParams.get("ref") || branch;
+    return {
+      owner: repoOwner,
+      repo: repoName,
+      branch: ref,
+      path: ensureJsonPath(rest.join("/"))
+    };
+  }
+
+  throw new Error("Only GitHub config URLs are supported.");
+}
+
+function resolveTarget(sourceUrl?: string | null): RepoTarget {
+  if (sourceUrl) {
+    return parseGitHubSourceUrl(sourceUrl);
+  }
+
   if (!owner || !repo) {
     throw new Error("Missing GITHUB_REPO_OWNER or GITHUB_REPO_NAME environment variables.");
   }
+
+  if (!/\.json$/i.test(configPath)) {
+    throw new Error("GITHUB_CONFIG_PATH must point to a .json file.");
+  }
+
   return {
     owner,
     repo,
-    url: `${apiBase}/repos/${owner}/${repo}/contents/${configPath}`
+    branch,
+    path: configPath
   };
+}
+
+function buildContentsUrl(target: RepoTarget): string {
+  return `${apiBase}/repos/${target.owner}/${target.repo}/contents/${encodeGitHubPath(target.path)}`;
 }
 
 function normalizeGitHubErrorBody(status: number, rawBody: string): string {
@@ -73,10 +169,14 @@ function normalizeGitHubErrorBody(status: number, rawBody: string): string {
   }
 }
 
-export async function getRedirectConfig(accessToken: string): Promise<RedirectConfigPayload> {
-  const { url } = ensureRepoConfig();
+export async function getRedirectConfig(
+  accessToken: string,
+  options?: { sourceUrl?: string | null }
+): Promise<RedirectConfigPayload> {
+  const target = resolveTarget(options?.sourceUrl);
+  const url = buildContentsUrl(target);
   const token = requireAccessToken(accessToken);
-  const response = await fetch(`${url}?ref=${encodeURIComponent(branch)}`, {
+  const response = await fetch(`${url}?ref=${encodeURIComponent(target.branch)}`, {
     headers: buildHeaders(token),
     cache: "no-store"
   });
@@ -107,6 +207,7 @@ export interface UpdateRedirectConfigInput {
   content: string;
   sha: string;
   message?: string;
+  sourceUrl?: string | null;
 }
 
 export interface UpdateRedirectConfigResult {
@@ -115,7 +216,8 @@ export interface UpdateRedirectConfigResult {
 }
 
 export async function updateRedirectConfig(accessToken: string, input: UpdateRedirectConfigInput): Promise<UpdateRedirectConfigResult> {
-  const { url } = ensureRepoConfig();
+  const target = resolveTarget(input.sourceUrl);
+  const url = buildContentsUrl(target);
   const token = requireAccessToken(accessToken);
   const { content, sha, message } = input;
   const response = await fetch(url, {
@@ -125,7 +227,7 @@ export async function updateRedirectConfig(accessToken: string, input: UpdateRed
       message: message ?? "Update redirects via WebUI",
       content: Buffer.from(content, "utf-8").toString("base64"),
       sha,
-      branch
+      branch: target.branch
     })
   });
 
@@ -148,12 +250,16 @@ export async function updateRedirectConfig(accessToken: string, input: UpdateRed
   };
 }
 
-export async function listRedirectHistory(accessToken: string, perPage = 10): Promise<CommitEntry[]> {
-  const { owner: repoOwner, repo: repoName } = ensureRepoConfig();
+export async function listRedirectHistory(
+  accessToken: string,
+  perPage = 10,
+  options?: { sourceUrl?: string | null }
+): Promise<CommitEntry[]> {
+  const target = resolveTarget(options?.sourceUrl);
   const token = requireAccessToken(accessToken);
-  const url = new URL(`${apiBase}/repos/${repoOwner}/${repoName}/commits`);
-  url.searchParams.set("path", configPath);
-  url.searchParams.set("sha", branch);
+  const url = new URL(`${apiBase}/repos/${target.owner}/${target.repo}/commits`);
+  url.searchParams.set("path", target.path);
+  url.searchParams.set("sha", target.branch);
   url.searchParams.set("per_page", String(perPage));
 
   const response = await fetch(url, {

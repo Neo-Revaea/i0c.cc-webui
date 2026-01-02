@@ -30,6 +30,8 @@ export function RedirectsGroupsManager({
   const {
     isLoading,
     loadError,
+    configSourceUrl,
+    loadFromUrl,
     slotsKey,
     rootGroup,
     selectedGroupId,
@@ -155,6 +157,8 @@ export function RedirectsGroupsManager({
         onUndo={undo}
         onRedo={redo}
         onSave={handleSave}
+        configUrl={configSourceUrl}
+        onLoadConfigUrl={loadFromUrl}
         resultMessage={resultMessage}
         lastCommitUrl={lastCommitUrl}
       />

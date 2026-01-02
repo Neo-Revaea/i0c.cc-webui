@@ -40,6 +40,7 @@ export function useRedirectsGroups() {
 
   const loadConfig = configFile.load;
   const saveConfig = configFile.save;
+  const configSourceUrl = configFile.sourceUrl;
 
   const { canUndo, canRedo, pushCurrentSnapshot, undo, redo, resetHistory } = useUndoRedo<GroupsSnapshot>({
     maxHistory: 50,
@@ -81,6 +82,27 @@ export function useRedirectsGroups() {
       cancelled = true;
     };
   }, [loadConfig, resetHistory, tGroups]);
+
+  const loadFromUrl = useCallback(
+    async (sourceUrl: string) => {
+      setIsLoading(true);
+      setLoadError(null);
+
+      try {
+        const content = await loadConfig(sourceUrl);
+        const parsed = parseInitialContent(content);
+        setEditorState((prev) => applyParsedConfig(prev, parsed));
+        resetHistory();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : tGroups("loadFail");
+        setLoadError(message);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [loadConfig, resetHistory, tGroups]
+  );
 
   const selectedGroup = useMemo(() => {
     return getSelectedGroup(editorState);
@@ -189,6 +211,8 @@ export function useRedirectsGroups() {
   return {
     isLoading,
     loadError,
+    configSourceUrl,
+    loadFromUrl,
     slotsKey,
     rootGroup,
     selectedGroupId,

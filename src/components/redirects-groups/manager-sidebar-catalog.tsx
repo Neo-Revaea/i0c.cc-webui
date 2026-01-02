@@ -89,7 +89,7 @@ export function RouteEntriesCatalog({
   const handleJump = (entryId: string) => {
     const target = document.getElementById(`entry-${entryId}`);
     if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   };
 

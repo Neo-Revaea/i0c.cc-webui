@@ -16,16 +16,18 @@ async function requireSession(): Promise<SessionWithToken | null> {
   return session as SessionWithToken;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await requireSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const sourceUrl = new URL(request.url).searchParams.get("sourceUrl") ?? undefined;
+
   try {
     const [config, history] = await Promise.all([
-      getRedirectConfig(session.accessToken),
-      listRedirectHistory(session.accessToken, 10)
+      getRedirectConfig(session.accessToken, { sourceUrl }),
+      listRedirectHistory(session.accessToken, 10, { sourceUrl })
     ]);
 
     return NextResponse.json({ config, history });
@@ -38,7 +40,8 @@ export async function GET() {
 const updateSchema = z.object({
   content: z.string().min(2, { message: "Config content is required" }),
   sha: z.string().min(2, { message: "Missing config version (sha)" }),
-  message: z.string().min(1).max(200).optional()
+  message: z.string().min(1).max(200).optional(),
+  sourceUrl: z.string().min(8).max(2048).optional()
 });
 
 export async function PUT(request: Request) {

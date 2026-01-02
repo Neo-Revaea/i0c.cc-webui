@@ -15,19 +15,27 @@ export function useRedirectsConfigFile(options: {
 
   const [sha, setSha] = useState<string>("");
 
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [lastCommitUrl, setLastCommitUrl] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (nextSourceUrl?: string | null) => {
     setIsLoading(true);
     setLoadError(null);
     setResultMessage(null);
     setLastCommitUrl(null);
 
+    const normalizedSourceUrl = typeof nextSourceUrl === "string" ? nextSourceUrl.trim() : null;
+    if (typeof nextSourceUrl !== "undefined") {
+      setSourceUrl(normalizedSourceUrl || null);
+    }
+
     try {
       const data = await fetchRedirectsConfig({
         fallbackLoadErrorText: options.fallbackLoadErrorText,
+        sourceUrl: typeof nextSourceUrl === "undefined" ? sourceUrl : (normalizedSourceUrl || null),
       });
 
       setSha(data.config.sha);
@@ -40,7 +48,7 @@ export function useRedirectsConfigFile(options: {
     } finally {
       setIsLoading(false);
     }
-  }, [options.fallbackLoadErrorText]);
+  }, [options.fallbackLoadErrorText, sourceUrl]);
 
   const save = useCallback(
     (content: string) => {
@@ -54,6 +62,7 @@ export function useRedirectsConfigFile(options: {
               content,
               sha,
               message: options.commitMessage,
+              ...(sourceUrl ? { sourceUrl } : {}),
             },
             {
               fallbackSaveErrorText: options.fallbackSaveErrorText,
@@ -72,13 +81,14 @@ export function useRedirectsConfigFile(options: {
         }
       });
     },
-    [options.commitMessage, options.fallbackSaveErrorText, options.saveOkText, sha]
+    [options.commitMessage, options.fallbackSaveErrorText, options.saveOkText, sha, sourceUrl]
   );
 
   return {
     isLoading,
     loadError,
     isPending,
+    sourceUrl,
     load,
     save,
     resultMessage,
